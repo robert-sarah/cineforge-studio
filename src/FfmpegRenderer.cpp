@@ -60,6 +60,29 @@ void writeRenderState(const std::filesystem::path& path,
 FfmpegRenderer::FfmpegRenderer(std::string ffmpegExecutable)
     : ffmpegExecutable_(std::move(ffmpegExecutable)) {}
 
+AudioAnalyzer::AudioAnalyzer(std::string ffmpegExecutable)
+    : ffmpegExecutable_(std::move(ffmpegExecutable)) {}
+
+bool AudioAnalyzer::extractWaveform(const std::filesystem::path& mediaPath, AudioWaveform& outWaveform, std::string* error) const {
+    const auto tempFile = std::filesystem::temp_directory_path() / ("waveform_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".raw");
+    std::string command = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error -i " + quote(mediaPath) + " -ac 1 -ar " + std::to_string(static_cast<int>(outWaveform.samplesPerSecond)) + " -f f32le " + quote(tempFile);
+    if (!run(command, error)) return false;
+    
+    std::ifstream file(tempFile, std::ios::binary);
+    if (!file) {
+        if (error) *error = "Failed to read waveform raw data.";
+        return false;
+    }
+    file.seekg(0, std::ios::end);
+    std::size_t size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    outWaveform.samples.resize(size / sizeof(float));
+    if (size > 0) file.read(reinterpret_cast<char*>(outWaveform.samples.data()), size);
+    std::error_code ignored;
+    std::filesystem::remove(tempFile, ignored);
+    return true;
+}
+
 bool FfmpegRenderer::writeSubtitleFile(const std::vector<SubtitleCue>& cues,
                                         const std::filesystem::path& destination,
                                         std::string* error) const {
@@ -157,19 +180,106 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
                 const auto segment = work / ("c" + std::to_string(cIdx) + "_segment_" + std::to_string(clipIndex++) + ".mp4");
                 std::string command = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error ";
 
+                std::string filter = "scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size + ",setsar=1";
+                
+                // Masques et Keyframes
+                if (!clip.scaleKeyframes.empty() || !clip.positionXKeyframes.empty() || !clip.positionYKeyframes.empty()) {
+                    // Si des keyframes explicites sont définies, on utilise zoompan avancé
+                    // On simule l'interpolation linéaire pour l'instant (FFmpeg requiert des expressions complexes pour cela)
+                    std::string zoomExpr = "1";
+                    if (!clip.scaleKeyframes.empty()) {
+                        // Smooth easing out for zoom
+                        double zStart = clip.scaleKeyframes.front().value;
+                        double zEnd = clip.scaleKeyframes.back().value;
+                        double zDiff = zEnd - zStart;
+                        // zoomExpr = start + diff * (1 - (1 - t/d)^3)  (Cubic Ease Out)
+                        zoomExpr = std::to_string(zStart) + "+(" + std::to_string(zDiff) + ")*(1-pow(1-time/" + std::to_string(clip.durationSeconds) + ",3))";
+                    }
+                    std::string xExpr = "0";
+                    std::string yExpr = "0";
+                    if (!clip.positionXKeyframes.empty()) {
+                        double xStart = clip.positionXKeyframes.front().value;
+                        double xEnd = clip.positionXKeyframes.back().value;
+                        double xDiff = xEnd - xStart;
+                        xExpr = "iw*(" + std::to_string(xStart) + "+(" + std::to_string(xDiff) + ")*(1-pow(1-time/" + std::to_string(clip.durationSeconds) + ",3)))-(iw/zoom/2)";
+                    } else {
+                        xExpr = "iw/2-(iw/zoom/2)";
+                    }
+                    if (!clip.positionYKeyframes.empty()) {
+                        double yStart = clip.positionYKeyframes.front().value;
+                        double yEnd = clip.positionYKeyframes.back().value;
+                        double yDiff = yEnd - yStart;
+                        yExpr = "ih*(" + std::to_string(yStart) + "+(" + std::to_string(yDiff) + ")*(1-pow(1-time/" + std::to_string(clip.durationSeconds) + ",3)))-(ih/zoom/2)";
+                    } else {
+                        yExpr = "ih/2-(ih/zoom/2)";
+                    }
+                    filter = "scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size +
+                             ",zoompan=z='" + zoomExpr + "':x='" + xExpr + "':y='" + yExpr + "':d=" + std::to_string(o.fps * clip.durationSeconds) +
+                             ":s=" + std::to_string(o.width) + "x" + std::to_string(o.height) + ":fps=" + std::to_string(o.fps) + ",setsar=1";
+                }
+
+                if (clip.maskType == "circle") {
+                    filter += ",geq=r='r(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),min(W/2,H/2)*min(W/2,H/2)),255,0)'";
+                } else if (clip.maskType == "rectangle") {
+                    filter += ",geq=r='r(X,Y)':a='if(and(gt(X,W*0.1),lt(X,W*0.9),gt(Y,H*0.1),lt(Y,H*0.9)),255,0)'";
+                }
+                
+                if (clip.rotation != 0.0) {
+                    filter += ",rotate=" + std::to_string(clip.rotation) + "*PI/180:c=black@0:ow=rotw(" + std::to_string(clip.rotation) + "*PI/180):oh=roth(" + std::to_string(clip.rotation) + "*PI/180)";
+                }
+
                 if (item.type == MediaType::Image) {
                     command += "-loop 1 -i " + quote(item.path) + " -t " + std::to_string(clip.durationSeconds) + " ";
-                    if (o.addZoomToImages) {
-                        command += "-vf \"scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size +
-                                   ",zoompan=z='min(zoom+0.0012,1.12)':d=" + std::to_string(o.fps * clip.durationSeconds) +
-                                   ":s=" + std::to_string(o.width) + "x" + std::to_string(o.height) + ":fps=" + std::to_string(o.fps) + ",setsar=1\" ";
-                    } else {
-                        command += "-vf \"scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size + ",setsar=1\" ";
+                    if (o.addZoomToImages && clip.scaleKeyframes.empty()) {
+                        filter = "scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size +
+                                 ",zoompan=z='min(zoom+0.0012,1.12)':d=" + std::to_string(o.fps * clip.durationSeconds) +
+                                 ":s=" + std::to_string(o.width) + "x" + std::to_string(o.height) + ":fps=" + std::to_string(o.fps) + ",setsar=1";
                     }
                 } else {
-                    command += "-ss " + std::to_string(clip.sourceInSeconds) + " -t " + std::to_string(clip.durationSeconds) + " -i " + quote(item.path) +
-                               " -vf \"scale=" + size + ":force_original_aspect_ratio=increase,crop=" + size + ",setsar=1\" ";
+                    command += "-ss " + std::to_string(clip.sourceInSeconds) + " -t " + std::to_string(clip.durationSeconds) + " -i " + quote(item.path) + " ";
                 }
+
+                if (clip.transitionIn == TransitionType::Crossfade) {
+                    filter += ",fade=t=in:st=0:d=" + std::to_string(clip.transitionInDuration);
+                } else if (clip.transitionIn == TransitionType::DipToBlack) {
+                    filter += ",fade=t=in:st=0:d=" + std::to_string(clip.transitionInDuration) + ":color=black";
+                } else if (clip.transitionIn == TransitionType::DipToWhite) {
+                    filter += ",fade=t=in:st=0:d=" + std::to_string(clip.transitionInDuration) + ":color=white";
+                }
+                
+                if (clip.transitionOut == TransitionType::Crossfade) {
+                    filter += ",fade=t=out:st=" + std::to_string(clip.durationSeconds - clip.transitionOutDuration) + ":d=" + std::to_string(clip.transitionOutDuration);
+                } else if (clip.transitionOut == TransitionType::DipToBlack) {
+                    filter += ",fade=t=out:st=" + std::to_string(clip.durationSeconds - clip.transitionOutDuration) + ":d=" + std::to_string(clip.transitionOutDuration) + ":color=black";
+                } else if (clip.transitionOut == TransitionType::DipToWhite) {
+                    filter += ",fade=t=out:st=" + std::to_string(clip.durationSeconds - clip.transitionOutDuration) + ":d=" + std::to_string(clip.transitionOutDuration) + ":color=white";
+                }
+
+                if (!clip.textOverlay.empty()) {
+                    // Simple drawtext for motion design overlay
+                    std::string escapedText = clip.textOverlay;
+                    // basic escaping for FFmpeg drawtext
+                    size_t pos = 0;
+                    while ((pos = escapedText.find("'", pos)) != std::string::npos) {
+                        escapedText.replace(pos, 1, "'\\\\''");
+                        pos += 6;
+                    }
+                    
+                    std::string textAnim = "";
+                    if (clip.textStyle == "pop") {
+                        // Pop-in animation: scale up quickly
+                        textAnim = ":fontsize='if(lt(t,0.3)," + std::to_string(clip.textSize) + "*t/0.3," + std::to_string(clip.textSize) + ")'";
+                    } else if (clip.textStyle == "typewriter") {
+                        // Typewriter effect (simplified)
+                        textAnim = ":text='" + escapedText + "':fontsize=" + std::to_string(clip.textSize); // Need more complex expr for real typewriter
+                    } else {
+                        textAnim = ":fontsize=" + std::to_string(clip.textSize);
+                    }
+                    
+                    filter += ",drawtext=text='" + escapedText + "':fontcolor=" + clip.textColor + textAnim + ":x=(w-text_w)/2:y=(h-text_h)/2";
+                }
+
+                command += "-vf \"" + filter + "\" ";
 
                 const bool hardware = o.videoEncoder == "h264_nvenc" || o.videoEncoder == "h264_vaapi" || o.videoEncoder == "h264_videotoolbox";
                 command += "-r " + std::to_string(o.fps) + " -an -c:v " + (o.videoEncoder.empty() ? "libx264" : o.videoEncoder) +
@@ -244,9 +354,9 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
     const bool hasMusic = !music.empty() && std::filesystem::exists(music);
     std::string finish = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error -i " + quote(silentVideo);
     if (hasVoice && hasMusic && o.duckMusicUnderVoice) {
-        finish += " -i " + quote(voice) + " -i " + quote(music) + " -map 0:v:0 -filter_complex \"[1:a]";
+        finish += " -i " + quote(voice) + " -i " + quote(music) + " -map 0:v:0 -filter_complex \"[1:a]volume=" + std::to_string(plan.voiceVolume) + "[v1];[v1]";
         if (o.loudnessNormalization) finish += "loudnorm=I=-16:TP=-1.5:LRA=11";
-        finish += "[voice];[2:a]volume=0.18[music];[music][voice]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[ducked];[voice][ducked]amix=inputs=2:duration=longest:normalize=0[aout]\" -map \"[aout]\" -c:a aac -shortest";
+        finish += "[voice];[2:a]volume=" + std::to_string(plan.musicVolume * 0.18) + "[music];[music][voice]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[ducked];[voice][ducked]amix=inputs=2:duration=longest:normalize=0[amix];[amix]volume=" + std::to_string(plan.masterVolume) + "[aout]\" -map \"[aout]\" -c:a aac -shortest";
     } else if (hasVoice || hasMusic) {
         const auto& audio = hasVoice ? voice : music;
         finish += " -i " + quote(audio) + " -map 0:v:0 -map 1:a:0";

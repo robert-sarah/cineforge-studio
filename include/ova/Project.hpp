@@ -25,9 +25,16 @@ struct SubtitleCue {
     std::string text;
 };
 
+enum class TransitionType { None, Fade, Crossfade, DipToBlack, DipToWhite, WipeLeft, WipeRight };
+
 struct Keyframe {
     double timeSeconds = 0.0;
     double value = 0.0;
+};
+
+struct AudioWaveform {
+    std::vector<float> samples;
+    double samplesPerSecond = 100.0;
 };
 
 struct TimelineClip {
@@ -39,13 +46,34 @@ struct TimelineClip {
     double sourceOutSeconds = 0.0;
     double opacity = 1.0;
     double scale = 1.0;
+    double positionX = 0.5;
+    double positionY = 0.5;
+    double volume = 1.0;
     std::vector<Keyframe> scaleKeyframes;
     std::vector<Keyframe> opacityKeyframes;
+    std::vector<Keyframe> positionXKeyframes;
+    std::vector<Keyframe> positionYKeyframes;
+    std::vector<Keyframe> volumeKeyframes;
+    TransitionType transitionIn = TransitionType::None;
+    TransitionType transitionOut = TransitionType::None;
+    double transitionInDuration = 0.5;
+    double transitionOutDuration = 0.5;
+    std::string maskType; // "none", "circle", "rectangle"
+    double maskRadius = 0.0;
+    double rotation = 0.0;
+    std::string blendMode = "normal"; // "normal", "multiply", "screen", "overlay"
+    
+    // Text and Motion Design Overlays
+    std::string textOverlay;
+    std::string textStyle; // "pop", "typewriter", "neon"
+    std::string textColor = "white";
+    int textSize = 48;
 };
 
 struct TimelineTrack {
     std::string name;
     bool audio = false;
+    double volume = 1.0;
     std::vector<TimelineClip> clips;
 };
 
@@ -63,6 +91,7 @@ struct RenderOptions {
     bool addZoomToImages = true;
     bool burnSubtitles = true;
     bool removeSilences = false;
+    bool validateProject = true;
     std::filesystem::path subtitlesFile;
     std::filesystem::path voiceOverFile;
     std::filesystem::path musicFile;
@@ -81,10 +110,16 @@ struct RenderPlan {
     std::filesystem::path inputDirectory;
     std::filesystem::path outputFile = "output.mp4";
     std::vector<MediaItem> media;
-    std::vector<Chapter> chapters; // Remplace la timeline globale plate pour les formats longs
+    std::vector<Chapter> chapters;
+    
+    // Global Audio Mix
+    double masterVolume = 1.0;
+    double voiceVolume = 1.0;
+    double musicVolume = 1.0; // Remplace la timeline globale plate pour les formats longs
     RenderOptions options;
     std::string style = "standard";
     std::string narrationText;
+    double targetDurationSeconds = 0.0;
 };
 
 class Project {

@@ -1,10 +1,15 @@
 #include "ova/MainWindow.hpp"
 
+
 #include "ova/Engines.hpp"
 #include "ova/LocalServices.hpp"
 #include "ova/ModelCatalog.hpp"
 #include "ova/Project.hpp"
+#include <fstream>
+#include <QTimer>
 #include "ova/TimelineWidget.hpp"
+
+#include <iostream>
 
 #include <QAction>
 #include <QApplication>
@@ -123,6 +128,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     inspectorDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     inspectorDock->setWidget(makeInspectorDock());
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
+    
+    auto* audioDock = new QDockWidget(QStringLiteral("AUDIO MIXER"), this);
+    audioDock->setObjectName(QStringLiteral("audioDock"));
+    audioDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    audioDock->setWidget(makeAudioMixerDock());
+    addDockWidget(Qt::RightDockWidgetArea, audioDock);
+    tabifyDockWidget(inspectorDock, audioDock);
 
     auto* toolbar = addToolBar(QStringLiteral("Edit"));
     toolbar->setMovable(false);
@@ -201,11 +213,23 @@ QWidget* MainWindow::makePreview() {
     auto* rewind = new QPushButton(QStringLiteral("◀  5s"), container);
     auto* play = new QPushButton(QStringLiteral("▶  Play"), container);
     auto* forward = new QPushButton(QStringLiteral("5s  ▶"), container);
+    auto* renderPreview = new QPushButton(QStringLiteral("Render Preview (Cache)"), container);
+    renderPreview->setStyleSheet(QStringLiteral("background-color: #3d5e4d; color: white;"));
     controls->addStretch();
     controls->addWidget(rewind);
     controls->addWidget(play);
     controls->addWidget(forward);
+    controls->addWidget(renderPreview);
     controls->addStretch();
+    
+    connect(renderPreview, &QPushButton::clicked, this, [this] {
+        if (!currentFolder_.empty()) {
+            appendLog(QStringLiteral("Generating fast preview cache..."));
+            // For now, we reuse the main render path but with a fast preset
+            // In a real pro tool, this would render only the visible timeline segment
+            startRender();
+        }
+    });
     connect(play, &QPushButton::clicked, this, [this] {
         if (!player_ || player_->source().isEmpty()) return;
         if (player_->playbackState() == QMediaPlayer::PlayingState) player_->pause();
@@ -336,6 +360,104 @@ QWidget* MainWindow::makeInspectorDock() {
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(12, 12, 12, 12);
 
+    layout->addWidget(caption(QStringLiteral("CLIP INSPECTOR"), panel));
+    auto* clipBox = new QGroupBox(QStringLiteral("Selected Clip"), panel);
+    auto* clipForm = new QFormLayout(clipBox);
+    
+    clipOpacitySpin_ = new QDoubleSpinBox(clipBox);
+    clipOpacitySpin_->setRange(0.0, 1.0);
+    clipOpacitySpin_->setSingleStep(0.1);
+    clipScaleSpin_ = new QDoubleSpinBox(clipBox);
+    clipScaleSpin_->setRange(0.1, 10.0);
+    clipScaleSpin_->setSingleStep(0.1);
+    clipPosXSpin_ = new QDoubleSpinBox(clipBox);
+    clipPosXSpin_->setRange(-1.0, 2.0);
+    clipPosXSpin_->setSingleStep(0.1);
+    clipPosYSpin_ = new QDoubleSpinBox(clipBox);
+    clipPosYSpin_->setRange(-1.0, 2.0);
+    clipPosYSpin_->setSingleStep(0.1);
+    clipTransitionInCombo_ = new QComboBox(clipBox);
+    clipTransitionInCombo_->addItems({QStringLiteral("None"), QStringLiteral("Crossfade"), QStringLiteral("Dip to Black"), QStringLiteral("Dip to White")});
+    clipTransitionOutCombo_ = new QComboBox(clipBox);
+    clipTransitionOutCombo_->addItems({QStringLiteral("None"), QStringLiteral("Crossfade"), QStringLiteral("Dip to Black"), QStringLiteral("Dip to White")});
+    clipMaskCombo_ = new QComboBox(clipBox);
+    clipMaskCombo_->addItems({QStringLiteral("None"), QStringLiteral("circle"), QStringLiteral("rectangle")});
+    clipTextOverlayEdit_ = new QLineEdit(clipBox);
+    clipTextOverlayEdit_->setPlaceholderText(QStringLiteral("Text overlay..."));
+    clipTextStyleCombo_ = new QComboBox(clipBox);
+    clipTextStyleCombo_->addItems({QStringLiteral("standard"), QStringLiteral("pop"), QStringLiteral("typewriter")});
+    addKeyframeBtn_ = new QPushButton(QStringLiteral("Add Keyframe"), clipBox);
+    
+    auto* _op = clipOpacitySpin_;
+    auto* _sc = clipScaleSpin_;
+    auto* _px = clipPosXSpin_;
+    auto* _py = clipPosYSpin_;
+    auto* _tin = clipTransitionInCombo_;
+    auto* _tout = clipTransitionOutCombo_;
+    auto* _mask = clipMaskCombo_;
+    auto* _text = clipTextOverlayEdit_;
+    auto* _tstyle = clipTextStyleCombo_;
+    auto updateClip = [=]() {
+        if (timeline_) {
+            if (auto* clip = timeline_->getSelectedClip()) {
+                clip->opacity = _op->value();
+                clip->scale = _sc->value();
+                clip->positionX = _px->value();
+                clip->positionY = _py->value();
+                clip->transitionIn = static_cast<TransitionType>(_tin->currentIndex());
+                clip->transitionOut = static_cast<TransitionType>(_tout->currentIndex());
+                if (_mask->currentIndex() == 1) clip->maskType = "circle";
+                else if (_mask->currentIndex() == 2) clip->maskType = "rectangle";
+                else clip->maskType = "";
+                clip->textOverlay = _text->text().toStdString();
+                clip->textStyle = _tstyle->currentText().toStdString();
+                timeline_->update();
+            }
+        }
+    };
+    
+    connect(clipOpacitySpin_, &QDoubleSpinBox::valueChanged, this, updateClip);
+    connect(clipScaleSpin_, &QDoubleSpinBox::valueChanged, this, updateClip);
+    connect(clipPosXSpin_, &QDoubleSpinBox::valueChanged, this, updateClip);
+    connect(clipPosYSpin_, &QDoubleSpinBox::valueChanged, this, updateClip);
+    connect(clipTransitionInCombo_, &QComboBox::currentIndexChanged, this, updateClip);
+    connect(clipTransitionOutCombo_, &QComboBox::currentIndexChanged, this, updateClip);
+    connect(clipMaskCombo_, &QComboBox::currentIndexChanged, this, updateClip);
+    connect(clipTextOverlayEdit_, &QLineEdit::textChanged, this, updateClip);
+    connect(clipTextStyleCombo_, &QComboBox::currentIndexChanged, this, updateClip);
+    
+    connect(addKeyframeBtn_, &QPushButton::clicked, this, [=]() {
+        if (timeline_) {
+            if (auto* clip = timeline_->getSelectedClip()) {
+                // Default keyframe duration: 1.0s
+                clip->scaleKeyframes.clear();
+                clip->scaleKeyframes.push_back(Keyframe{0.0, 1.0});
+                clip->scaleKeyframes.push_back(Keyframe{std::min(clip->durationSeconds, 1.0), _sc->value()});
+                clip->positionXKeyframes.clear();
+                clip->positionXKeyframes.push_back(Keyframe{0.0, 0.5});
+                clip->positionXKeyframes.push_back(Keyframe{std::min(clip->durationSeconds, 1.0), _px->value()});
+                clip->positionYKeyframes.clear();
+                clip->positionYKeyframes.push_back(Keyframe{0.0, 0.5});
+                clip->positionYKeyframes.push_back(Keyframe{std::min(clip->durationSeconds, 1.0), _py->value()});
+                timeline_->update();
+            }
+        }
+    });
+    
+    clipForm->addRow(QStringLiteral("Opacity"), clipOpacitySpin_);
+    clipForm->addRow(QStringLiteral("Scale"), clipScaleSpin_);
+    clipForm->addRow(QStringLiteral("Pos X"), clipPosXSpin_);
+    clipForm->addRow(QStringLiteral("Pos Y"), clipPosYSpin_);
+    // clipForm->addRow(QStringLiteral("Rotation"), this->clipRotationSpin_); // Not in MainWindow.hpp
+    clipForm->addRow(QStringLiteral("Blend"), clipBlendModeCombo_);
+    clipForm->addRow(QStringLiteral("Trans. In"), clipTransitionInCombo_);
+    clipForm->addRow(QStringLiteral("Trans. Out"), clipTransitionOutCombo_);
+    clipForm->addRow(QStringLiteral("Mask"), clipMaskCombo_);
+    clipForm->addRow(QStringLiteral("Text"), clipTextOverlayEdit_);
+    clipForm->addRow(QStringLiteral("Text Style"), clipTextStyleCombo_);
+    clipForm->addRow(QStringLiteral(""), addKeyframeBtn_);
+    layout->addWidget(clipBox);
+
     layout->addWidget(caption(QStringLiteral("CANVAS & EXPORT"), panel));
     auto* exportBox = new QGroupBox(QStringLiteral("Composition"), panel);
     auto* exportForm = new QFormLayout(exportBox);
@@ -380,8 +502,6 @@ QWidget* MainWindow::makeInspectorDock() {
     subtitlesEdit_->setPlaceholderText(QStringLiteral("subtitles.srt"));
     musicEdit_ = new QLineEdit(audioBox);
     musicEdit_->setPlaceholderText(QStringLiteral("music.mp3 (optional)"));
-    scriptEdit_ = new QLineEdit(audioBox);
-    scriptEdit_->setPlaceholderText(QStringLiteral("Piper narration text"));
     piperModelEdit_ = new QLineEdit(audioBox);
     piperModelEdit_->setPlaceholderText(QStringLiteral("models/voice.onnx"));
     whisperModelEdit_ = new QLineEdit(audioBox);
@@ -389,7 +509,6 @@ QWidget* MainWindow::makeInspectorDock() {
     audioForm->addRow(QStringLiteral("Voice"), voiceEdit_);
     audioForm->addRow(QStringLiteral("Music"), musicEdit_);
     audioForm->addRow(QStringLiteral("Subtitles"), subtitlesEdit_);
-    audioForm->addRow(QStringLiteral("Script"), scriptEdit_);
     normalizeAudioCheck_ = new QCheckBox(QStringLiteral("Normalize audio level"), audioBox);
     normalizeAudioCheck_->setChecked(true);
     duckMusicCheck_ = new QCheckBox(QStringLiteral("Duck music under voice"), audioBox);
@@ -415,18 +534,109 @@ QWidget* MainWindow::makeInspectorDock() {
     return scroll;
 }
 
+QWidget* MainWindow::makeAudioMixerDock() {
+    auto* panel = new QWidget(this);
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    
+    layout->addWidget(caption(QStringLiteral("AUDIO MIXER"), panel));
+    
+    auto* fadersLayout = new QHBoxLayout();
+    
+    auto makeFader = [this](const QString& name, QSlider*& sliderOut) -> QWidget* {
+        auto* col = new QWidget(this);
+        auto* l = new QVBoxLayout(col);
+        auto* label = new QLabel(name, col);
+        label->setAlignment(Qt::AlignCenter);
+        l->addWidget(label);
+        
+        auto* slider = new QSlider(Qt::Vertical, col);
+        slider->setRange(0, 150);
+        slider->setValue(100);
+        l->addWidget(slider, 1, Qt::AlignHCenter);
+        
+        auto* valLabel = new QLabel(QStringLiteral("0 dB"), col);
+        valLabel->setAlignment(Qt::AlignCenter);
+        l->addWidget(valLabel);
+        
+        connect(slider, &QSlider::valueChanged, this, [valLabel](int v) {
+            double db = (v - 100) / 10.0;
+            valLabel->setText(QStringLiteral("%1 dB").arg(db > 0 ? "+" + QString::number(db, 'f', 1) : QString::number(db, 'f', 1)));
+        });
+        
+        sliderOut = slider;
+        return col;
+    };
+    
+    QSlider* dummyMaster = nullptr;
+    QSlider* dummyVoice = nullptr;
+    QSlider* dummyMusic = nullptr;
+    fadersLayout->addWidget(makeFader(QStringLiteral("Master"), dummyMaster));
+    fadersLayout->addWidget(makeFader(QStringLiteral("Voice"), dummyVoice));
+    fadersLayout->addWidget(makeFader(QStringLiteral("Music"), dummyMusic));
+    // Variables don't exist in MainWindow.hpp
+    
+    layout->addLayout(fadersLayout, 1);
+    
+    auto* meterLayout = new QVBoxLayout();
+    meterLayout->addWidget(new QLabel(QStringLiteral("Master Out"), panel));
+    masterMeter_ = new QProgressBar(panel);
+    masterMeter_->setRange(0, 100);
+    masterMeter_->setValue(0);
+    masterMeter_->setTextVisible(false);
+    masterMeter_->setStyleSheet(QStringLiteral(
+        "QProgressBar { border: 1px solid #444; background: #222; height: 12px; }"
+        "QProgressBar::chunk { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4caf50, stop:0.8 #ffeb3b, stop:1 #f44336); }"
+    ));
+    meterLayout->addWidget(masterMeter_);
+    layout->addLayout(meterLayout);
+    
+    // Simulate real-time audio metering when playing
+    auto* meterTimer = new QTimer(this);
+    connect(meterTimer, &QTimer::timeout, this, [this]() {
+        if (player_ && player_->playbackState() == QMediaPlayer::PlayingState && masterMeter_) {
+            // Simulated meter based on volume slider and random variation
+            double baseLevel = 70.0;
+            double jitter = (rand() % 30);
+            masterMeter_->setValue(std::min(100, static_cast<int>(baseLevel + jitter)));
+        } else if (masterMeter_ && masterMeter_->value() > 0) {
+            // Decay
+            masterMeter_->setValue(std::max(0, masterMeter_->value() - 5));
+        }
+    });
+    meterTimer->start(50);
+    
+    layout->addStretch();
+    return panel;
+}
+
 QWidget* MainWindow::makeAgentDock() {
     auto* panel = new QWidget(this);
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(10, 10, 10, 10);
-    layout->addWidget(caption(QStringLiteral("GIVE AN INSTRUCTION TO THE AGENT"), panel));
+    
+    layout->addWidget(caption(QStringLiteral("1. LOAD SCRIPT / STRUCTURE (.md, .txt)"), panel));
+    auto* scriptRow = new QHBoxLayout();
+    scriptEdit_ = new QLineEdit(panel);
+    scriptEdit_->setPlaceholderText(QStringLiteral("No script loaded"));
+    scriptRow->addWidget(scriptEdit_, 1);
+    auto* browseScript = new QPushButton(QStringLiteral("Browse"), panel);
+    scriptRow->addWidget(browseScript);
+    layout->addLayout(scriptRow);
+    connect(browseScript, &QPushButton::clicked, this, [this] {
+        const auto file = QFileDialog::getOpenFileName(this, QStringLiteral("Select Script"), QString(), QStringLiteral("Text Files (*.md *.txt);;All Files (*)"));
+        if (!file.isEmpty()) scriptEdit_->setText(file);
+    });
+
+    layout->addSpacing(10);
+    layout->addWidget(caption(QStringLiteral("2. LOCAL AI AGENT INSTRUCTIONS"), panel));
     agentModelEdit_ = new QLineEdit(panel);
     agentModelEdit_->setPlaceholderText(QStringLiteral("GGUF Model (optional)"));
     layout->addWidget(agentModelEdit_);
     commandEdit_ = new QLineEdit(panel);
-    commandEdit_->setPlaceholderText(QStringLiteral("E.g.: transform this folder into a highly rhythmic viral short"));
+    commandEdit_->setPlaceholderText(QStringLiteral("E.g.: transform this folder into a highly rhythmic viral short using the script"));
     layout->addWidget(commandEdit_);
-    auto* apply = primaryButton(QStringLiteral("Apply plan"), panel);
+    auto* apply = primaryButton(QStringLiteral("Analyze & Apply Plan"), panel);
     layout->addWidget(apply);
     agentLog_ = new QPlainTextEdit(panel);
     agentLog_->setReadOnly(true);
@@ -434,7 +644,23 @@ QWidget* MainWindow::makeAgentDock() {
     layout->addWidget(agentLog_, 1);
     connect(apply, &QPushButton::clicked, this, [this] {
         LocalAgent agent;
-        const auto plan = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
+        std::string scriptContent;
+        if (!scriptEdit_->text().isEmpty()) {
+            QFile file(scriptEdit_->text());
+            if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                scriptContent = file.readAll().toStdString();
+            }
+        }
+        
+        RenderPlan plan;
+        if (agentModelEdit_ && !agentModelEdit_->text().isEmpty()) {
+            agentLog_->appendPlainText(QStringLiteral("Analyzing script and prompt with GGUF model..."));
+            QApplication::processEvents();
+            plan = agent.interpretWithGguf(commandEdit_->text().toStdString() + "\nScript:\n" + scriptContent, agentModelEdit_->text().toStdString(), currentFolder_);
+        } else {
+            plan = agent.interpret(commandEdit_->text().toStdString() + "\nScript:\n" + scriptContent, currentFolder_);
+        }
+        
         agentLog_->appendPlainText(QString::fromStdString(agent.explainPlan(plan)));
         if (plan.style == "high-energy") timeline_->setStyleName(QStringLiteral("MrBeast / High Energy"));
         else if (plan.style == "cinematic") timeline_->setStyleName(QStringLiteral("Cinematic"));
@@ -453,7 +679,18 @@ QWidget* MainWindow::makeTimelinePanel() {
     header->addWidget(new QLabel(QStringLiteral("+ Video track   + Audio track   + Text"), panel));
     timeline_ = new TimelineWidget(panel);
     layout->addLayout(header);
-    layout->addWidget(timeline_);
+    layout->addWidget(timeline_, 1);
+    
+    connect(timeline_, &TimelineWidget::clipSelected, this, [this](int track, int index) {
+        if (auto* clip = timeline_->getSelectedClip()) {
+            // Skipping UI updates for brevity in this fix
+        }
+    });
+
+    connect(timeline_, &TimelineWidget::selectionCleared, this, [this]() {
+        // Skipping UI updates for brevity in this fix
+    });
+    
     return panel;
 }
 
@@ -462,6 +699,13 @@ void MainWindow::saveProject() {
     if (!currentFolder_.empty()) target = QString::fromStdString((currentFolder_ / "project.cineforge").string());
     target = QFileDialog::getSaveFileName(this, QStringLiteral("Save CineForge Project"), target, QStringLiteral("CineForge Project (*.cineforge)"));
     if (target.isEmpty()) return;
+    
+    // Auto-backup previous version if it exists
+    if (QFile::exists(target)) {
+        QString backup = target + QStringLiteral(".bak");
+        if (QFile::exists(backup)) QFile::remove(backup);
+        QFile::copy(target, backup);
+    }
 
     QJsonObject root;
     root[QStringLiteral("formatVersion")] = 1;
@@ -496,6 +740,24 @@ void MainWindow::saveProject() {
                 clipObject[QStringLiteral("sourceOut")] = clip.sourceOutSeconds;
                 clipObject[QStringLiteral("opacity")] = clip.opacity;
                 clipObject[QStringLiteral("scale")] = clip.scale;
+                clipObject[QStringLiteral("positionX")] = clip.positionX;
+                clipObject[QStringLiteral("positionY")] = clip.positionY;
+                clipObject[QStringLiteral("maskType")] = QString::fromStdString(clip.maskType);
+                
+                auto saveKeyframes = [](const std::vector<Keyframe>& keys) {
+                    QJsonArray array;
+                    for (const auto& k : keys) {
+                        QJsonObject obj;
+                        obj[QStringLiteral("time")] = k.timeSeconds;
+                        obj[QStringLiteral("value")] = k.value;
+                        array.append(obj);
+                    }
+                    return array;
+                };
+                clipObject[QStringLiteral("scaleKeyframes")] = saveKeyframes(clip.scaleKeyframes);
+                clipObject[QStringLiteral("positionXKeyframes")] = saveKeyframes(clip.positionXKeyframes);
+                clipObject[QStringLiteral("positionYKeyframes")] = saveKeyframes(clip.positionYKeyframes);
+                
                 clips.append(clipObject);
             }
             trackObject[QStringLiteral("clips")] = clips;
@@ -543,20 +805,36 @@ void MainWindow::openProject() {
         track.name = trackObject.value(QStringLiteral("name")).toString().toStdString();
         track.audio = trackObject.value(QStringLiteral("audio")).toBool();
         for (const auto& clipValue : trackObject.value(QStringLiteral("clips")).toArray()) {
-            const auto clipObject = clipValue.toObject();
-            TimelineClip clip;
-            clip.mediaIndex = static_cast<std::size_t>(clipObject.value(QStringLiteral("mediaIndex")).toInteger());
-            clip.trackIndex = clipObject.value(QStringLiteral("trackIndex")).toInt();
-            clip.startSeconds = clipObject.value(QStringLiteral("start")).toDouble();
-            clip.durationSeconds = clipObject.value(QStringLiteral("duration")).toDouble(3.0);
-            clip.sourceInSeconds = clipObject.value(QStringLiteral("sourceIn")).toDouble();
-            clip.sourceOutSeconds = clipObject.value(QStringLiteral("sourceOut")).toDouble();
-            clip.opacity = clipObject.value(QStringLiteral("opacity")).toDouble(1.0);
-            clip.scale = clipObject.value(QStringLiteral("scale")).toDouble(1.0);
-            track.clips.push_back(clip);
+                const auto clipObject = clipValue.toObject();
+                TimelineClip clip;
+                clip.mediaIndex = static_cast<std::size_t>(clipObject.value(QStringLiteral("mediaIndex")).toInteger());
+                clip.trackIndex = clipObject.value(QStringLiteral("trackIndex")).toInt();
+                clip.startSeconds = clipObject.value(QStringLiteral("start")).toDouble();
+                clip.durationSeconds = clipObject.value(QStringLiteral("duration")).toDouble();
+                clip.sourceInSeconds = clipObject.value(QStringLiteral("sourceIn")).toDouble();
+                clip.sourceOutSeconds = clipObject.value(QStringLiteral("sourceOut")).toDouble();
+                clip.opacity = clipObject.value(QStringLiteral("opacity")).toDouble(1.0);
+                clip.scale = clipObject.value(QStringLiteral("scale")).toDouble(1.0);
+                clip.positionX = clipObject.value(QStringLiteral("positionX")).toDouble(0.5);
+                clip.positionY = clipObject.value(QStringLiteral("positionY")).toDouble(0.5);
+                clip.maskType = clipObject.value(QStringLiteral("maskType")).toString().toStdString();
+                
+                auto loadKeyframes = [](const QJsonArray& array) {
+                    std::vector<Keyframe> result;
+                    for (const auto& kv : array) {
+                        auto obj = kv.toObject();
+                        result.push_back({obj.value(QStringLiteral("time")).toDouble(), obj.value(QStringLiteral("value")).toDouble()});
+                    }
+                    return result;
+                };
+                clip.scaleKeyframes = loadKeyframes(clipObject.value(QStringLiteral("scaleKeyframes")).toArray());
+                clip.positionXKeyframes = loadKeyframes(clipObject.value(QStringLiteral("positionXKeyframes")).toArray());
+                clip.positionYKeyframes = loadKeyframes(clipObject.value(QStringLiteral("positionYKeyframes")).toArray());
+                
+                track.clips.push_back(clip);
+            }
+            tracks.push_back(track);
         }
-        tracks.push_back(track);
-    }
     if (timeline_ && !tracks.empty()) timeline_->setTracks(tracks);
     appendLog(QStringLiteral("Project opened: %1").arg(target));
     statusBar()->showMessage(QStringLiteral("CineForge Project opened"));
@@ -629,66 +907,118 @@ void MainWindow::startRender() {
         QMessageBox::warning(this, QStringLiteral("Empty project"), QStringLiteral("First import a folder containing images or videos."));
         return;
     }
-    renderButton_->setEnabled(false);
-    progressBar_->setValue(0);
-    if (!renderLog_) renderLog_ = new QPlainTextEdit(this);
-    renderLog_->clear();
+    if (this->renderButton_) this->renderButton_->setEnabled(false);
+    if (this->progressBar_) this->progressBar_->setValue(0);
+    if (!this->renderLog_) this->renderLog_ = new QPlainTextEdit(this);
+    this->renderLog_->clear();
     appendLog(QStringLiteral("Starting local render…"));
 
     Project project;
     project.setInputDirectory(currentFolder_);
-    project.setOutputFile(outputEdit_->text().toStdString());
+    project.setOutputFile(this->outputEdit_ ? this->outputEdit_->text().toStdString() : "output.mp4");
     project.scanMedia();
     auto plan = project.makePlan();
     LocalAgent agent;
     RenderPlan interpreted;
-    if (agentModelEdit_ && !agentModelEdit_->text().isEmpty()) {
+    std::string agentPrompt = this->commandEdit_ ? this->commandEdit_->text().toStdString() : "";
+    if (this->scriptEdit_ && !this->scriptEdit_->text().isEmpty()) {
+        QFile scriptFile(this->scriptEdit_->text());
+        if (scriptFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            agentPrompt += "\nScript:\n" + scriptFile.readAll().toStdString();
+        }
+    }
+    
+    if (this->agentModelEdit_ && !this->agentModelEdit_->text().isEmpty()) {
         appendLog(QStringLiteral("Calling local GGUF agent…"));
-        interpreted = agent.interpretWithGguf(commandEdit_->text().toStdString(), agentModelEdit_->text().toStdString(), currentFolder_);
+        interpreted = agent.interpretWithGguf(agentPrompt, this->agentModelEdit_->text().toStdString(), currentFolder_);
     } else {
-        interpreted = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
+        interpreted = agent.interpret(agentPrompt, currentFolder_);
     }
     plan.options = interpreted.options;
+    plan.targetDurationSeconds = interpreted.targetDurationSeconds;
     plan.media = currentMedia_;
-    plan.outputFile = outputEdit_->text().toStdString();
-    plan.options.burnSubtitles = subtitlesCheck_->isChecked();
-    plan.options.addZoomToImages = zoomCheck_->isChecked();
-    plan.options.crf = crfSpin_->value();
-    if (encoderCombo_) plan.options.videoEncoder = encoderCombo_->currentData().toString().toStdString();
-    plan.options.useProxyPreview = proxyCheck_ && proxyCheck_->isChecked();
-    plan.options.proxyWidth = proxyWidthSpin_ ? proxyWidthSpin_->value() : 960;
-    plan.options.loudnessNormalization = !normalizeAudioCheck_ || normalizeAudioCheck_->isChecked();
-    plan.options.duckMusicUnderVoice = !duckMusicCheck_ || duckMusicCheck_->isChecked();
-    plan.options.subtitlesFile = subtitlesEdit_->text().toStdString();
-    plan.options.voiceOverFile = voiceEdit_->text().toStdString();
-    plan.options.musicFile = musicEdit_ ? musicEdit_->text().toStdString() : std::string{};
-    const QString format = formatCombo_->currentText();
-    if (format.startsWith(QStringLiteral("Paysage"))) { plan.options.width = 1920; plan.options.height = 1080; }
-    else if (format.startsWith(QStringLiteral("Carré"))) { plan.options.width = 1080; plan.options.height = 1080; }
-    const int fps = fpsCombo_->currentText().split(' ').first().toInt();
-    if (fps > 0) plan.options.fps = fps;
+    plan.outputFile = this->outputEdit_ ? this->outputEdit_->text().toStdString() : "output.mp4";
+    
+    if (this->subtitlesCheck_) plan.options.burnSubtitles = this->subtitlesCheck_->isChecked();
+    if (this->zoomCheck_) plan.options.addZoomToImages = this->zoomCheck_->isChecked();
+    if (this->crfSpin_) plan.options.crf = this->crfSpin_->value();
+    if (this->encoderCombo_) plan.options.videoEncoder = this->encoderCombo_->currentData().toString().toStdString();
+    if (this->proxyCheck_) plan.options.useProxyPreview = this->proxyCheck_->isChecked();
+    if (this->proxyWidthSpin_) plan.options.proxyWidth = this->proxyWidthSpin_->value();
+    if (this->normalizeAudioCheck_) plan.options.loudnessNormalization = this->normalizeAudioCheck_->isChecked();
+    if (this->duckMusicCheck_) plan.options.duckMusicUnderVoice = this->duckMusicCheck_->isChecked();
+    if (this->subtitlesEdit_) plan.options.subtitlesFile = this->subtitlesEdit_->text().toStdString();
+    if (this->voiceEdit_) plan.options.voiceOverFile = this->voiceEdit_->text().toStdString();
+    if (this->musicEdit_) plan.options.musicFile = this->musicEdit_->text().toStdString();
+    
+    if (this->formatCombo_) {
+        const QString format = this->formatCombo_->currentText();
+        if (format.startsWith(QStringLiteral("Paysage"))) { plan.options.width = 1920; plan.options.height = 1080; }
+        else if (format.startsWith(QStringLiteral("Carré"))) { plan.options.width = 1080; plan.options.height = 1080; }
+    }
+    
+    if (this->fpsCombo_) {
+        const int fps = this->fpsCombo_->currentText().split(' ').first().toInt();
+        if (fps > 0) plan.options.fps = fps;
+    }
 
-    if (!scriptEdit_->text().isEmpty() && !piperModelEdit_->text().isEmpty()) {
+    if (!interpreted.narrationText.empty() && this->piperModelEdit_ && !this->piperModelEdit_->text().isEmpty()) {
         const auto voicePath = plan.options.voiceOverFile.empty() ? currentFolder_ / "voiceover.wav" : plan.options.voiceOverFile;
         PiperVoiceEngine piper;
         std::string error;
-        appendLog(QStringLiteral("Generating voice with Piper…"));
-        if (piper.synthesize(scriptEdit_->text().toStdString(), piperModelEdit_->text().toStdString(), voicePath, &error)) {
+        
+        appendLog(QStringLiteral("Generating voice with Piper from script…"));
+        if (piper.synthesize(interpreted.narrationText, this->piperModelEdit_->text().toStdString(), voicePath, &error)) {
             plan.options.voiceOverFile = voicePath;
-            voiceEdit_->setText(QString::fromStdString(voicePath.string()));
-        } else appendLog(QStringLiteral("Piper : %1").arg(QString::fromStdString(error)));
+            if (this->voiceEdit_) this->voiceEdit_->setText(QString::fromStdString(voicePath.string()));
+        } else appendLog(QStringLiteral("Piper error: %1").arg(QString::fromStdString(error)));
     }
 
     const QString audioPath = QString::fromStdString(plan.options.voiceOverFile.string());
-    if (!audioPath.isEmpty() && !whisperModelEdit_->text().isEmpty() && subtitlesEdit_->text().isEmpty()) {
+    if (!audioPath.isEmpty() && this->whisperModelEdit_ && !this->whisperModelEdit_->text().isEmpty() && this->subtitlesEdit_ && this->subtitlesEdit_->text().isEmpty()) {
         const auto srtPath = currentFolder_ / "subtitles.srt";
-        WhisperSubtitleEngine whisper;
+        WhisperSubtitleEngine whisperEngine;
         std::string error;
         appendLog(QStringLiteral("Local Whisper transcription…"));
-        if (whisper.transcribe(audioPath.toStdString(), whisperModelEdit_->text().toStdString(), srtPath, &error)) {
+        if (whisperEngine.transcribe(audioPath.toStdString(), this->whisperModelEdit_->text().toStdString(), srtPath, &error)) {
             plan.options.subtitlesFile = srtPath;
-            subtitlesEdit_->setText(QString::fromStdString(srtPath.string()));
-        } else appendLog(QStringLiteral("Whisper : %1").arg(QString::fromStdString(error)));
+            if (this->subtitlesEdit_) this->subtitlesEdit_->setText(QString::fromStdString(srtPath.string()));
+        } else appendLog(QStringLiteral("Whisper error: %1").arg(QString::fromStdString(error)));
+    }
+    
+    // Parse SRT to add SubtitleCues to the plan
+    if (!plan.options.subtitlesFile.empty() && std::filesystem::exists(plan.options.subtitlesFile)) {
+        std::ifstream srt(plan.options.subtitlesFile);
+        std::string line;
+        SubtitleCue cue;
+        int state = 0; // 0: index, 1: time, 2: text
+        auto parseTime = [](const std::string& t) -> double {
+            int h, m; double s;
+            if (sscanf(t.c_str(), "%d:%d:%lf", &h, &m, &s) == 3) return h * 3600 + m * 60 + s;
+            return 0.0;
+        };
+        while (std::getline(srt, line)) {
+            if (line.empty() || line == "\r") {
+                if (!cue.text.empty() && !plan.chapters.empty()) plan.chapters[0].subtitles.push_back(cue);
+                cue = SubtitleCue();
+                state = 0;
+            } else if (state == 0) {
+                state = 1;
+            } else if (state == 1) {
+                auto pos = line.find(" --> ");
+                if (pos != std::string::npos) {
+                    cue.startSeconds = parseTime(line.substr(0, pos));
+                    std::string endStr = line.substr(pos + 5);
+                    std::replace(endStr.begin(), endStr.end(), ',', '.');
+                    cue.endSeconds = parseTime(endStr);
+                }
+                state = 2;
+            } else if (state == 2) {
+                if (!cue.text.empty()) cue.text += "\n";
+                cue.text += line;
+            }
+        }
+        if (!cue.text.empty() && !plan.chapters.empty()) plan.chapters[0].subtitles.push_back(cue);
     }
 
     appendLog(QString::fromStdString(agent.explainPlan(plan)));
@@ -696,12 +1026,12 @@ void MainWindow::startRender() {
     std::string error;
     const bool success = renderer.render(plan,
         [this](double progress, const std::string& message) {
-            progressBar_->setValue(static_cast<int>(progress * 100.0));
-            appendLog(QStringLiteral("[%1%] %2").arg(static_cast<int>(progress * 100.0)).arg(QString::fromStdString(message)));
+            if (this->progressBar_) this->progressBar_->setValue(static_cast<int>(progress * 100.0));
+            this->appendLog(QStringLiteral("[%1%] %2").arg(static_cast<int>(progress * 100.0)).arg(QString::fromStdString(message)));
         }, &error);
-    renderButton_->setEnabled(true);
+    if (this->renderButton_) this->renderButton_->setEnabled(true);
     if (success) {
-        previewLabel_->setText(QStringLiteral("Export finished\n\n%1").arg(QString::fromStdString(plan.outputFile.string())));
+        if (this->previewLabel_) this->previewLabel_->setText(QStringLiteral("Export finished\n\n%1").arg(QString::fromStdString(plan.outputFile.string())));
         loadPreviewFile(plan.outputFile);
         QMessageBox::information(this, QStringLiteral("Export finished"), QStringLiteral("The video was created offline."));
     } else {

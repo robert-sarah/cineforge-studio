@@ -22,6 +22,14 @@ private:
     std::string ffmpegExecutable_;
 };
 
+class AudioAnalyzer {
+public:
+    explicit AudioAnalyzer(std::string ffmpegExecutable = "ffmpeg");
+    bool extractWaveform(const std::filesystem::path& mediaPath, AudioWaveform& outWaveform, std::string* error = nullptr) const;
+private:
+    std::string ffmpegExecutable_;
+};
+
 class LocalAgent {
 public:
     RenderPlan interpret(const std::string& instruction,

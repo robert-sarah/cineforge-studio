@@ -71,6 +71,16 @@ RenderPlan LocalAgent::interpret(const std::string& instruction,
         plan.options.height = 1080;
     }
 
+    std::regex durationRegex(R"((?:de|d'une durée de|durée|duration|for|length)\s*(\d+(?:[.,]\d+)?)\s*(secondes?|sec|s|minutes?|min|m|heures?|h))", std::regex::icase);
+    std::smatch durationMatch;
+    if (std::regex_search(instruction, durationMatch, durationRegex) && durationMatch.size() > 2) {
+        double val = std::stod(durationMatch[1].str());
+        std::string unit = lower(durationMatch[2].str());
+        if (unit.find("m") == 0 && unit != "ms") val *= 60.0;
+        else if (unit.find("h") == 0) val *= 3600.0;
+        plan.targetDurationSeconds = val;
+    }
+
     if (text.find("mrbeast") != std::string::npos || text.find("viral") != std::string::npos ||
         text.find("dynamique") != std::string::npos || text.find("rapide") != std::string::npos) {
         plan.style = "high-energy";
@@ -147,12 +157,13 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
     const auto promptFile = work / "prompt.txt";
     const auto resultFile = work / "result.txt";
     const std::string prompt =
-        "You are the local agent of CineForge Studio. Analyze the editing request and reply only with a compact JSON. "
+        "You are the local agent of CineForge Studio. Analyze the editing request (which may include a full script) and reply only with a compact JSON. "
         "Schema: {\\\"style\\\":\\\"high-energy|cinematic|documentary|vlog|gaming|podcast|tutorial|standard\\\","
         "\\\"width\\\":1080 or 1920,\\\"height\\\":1080 or 1920,\\\"zoom\\\":true or false,"
         "\\\"subtitles\\\":true or false,\\\"remove_silences\\\":true or false,"
         "\\\"normalize_audio\\\":true or false,\\\"duck_music\\\":true or false,"
-        "\\\"use_proxies\\\":true or false}. Request: " + instruction;
+        "\\\"use_proxies\\\":true or false,\\\"script_detected\\\":true or false,"
+        "\\\"extract_voice_over\\\":true or false}. Request: " + instruction;
     {
         std::ofstream file(promptFile);
         file << prompt;
@@ -177,6 +188,15 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
     if (std::regex_search(output, match, std::regex(R"(\"normalize_audio\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.loudnessNormalization = match[1].str() == "true";
     if (std::regex_search(output, match, std::regex(R"(\"duck_music\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.duckMusicUnderVoice = match[1].str() == "true";
     if (std::regex_search(output, match, std::regex(R"(\"use_proxies\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.useProxyPreview = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"script_detected\"\s*:\s*(true|false))")) && match.size() > 1) {
+        if (match[1].str() == "true" && plan.style == "standard") plan.style = "documentary";
+    }
+    
+    // Si un script est fourni, on va extraire le texte de narration pour Piper
+    std::regex scriptRegex(R"(Script:\s*([\s\S]+))");
+    if (std::regex_search(instruction, match, scriptRegex) && match.size() > 1) {
+        plan.narrationText = match[1].str();
+    }
     std::filesystem::remove_all(work, ignored);
     return plan;
 }
@@ -188,6 +208,12 @@ std::string LocalAgent::explainPlan(const RenderPlan& plan) const {
         << plan.media.size() << " media, zoom=" << (plan.options.addZoomToImages ? "yes" : "no")
         << ", subtitles=" << (plan.options.burnSubtitles ? "yes" : "no")
         << ", audio_pro=" << (plan.options.loudnessNormalization ? "yes" : "no");
+    if (plan.targetDurationSeconds > 0) {
+        out << ", target_duration=" << plan.targetDurationSeconds << "s";
+    }
+    if (plan.style == "documentary" || plan.style == "high-energy") {
+        out << "\n[Agent] Script & prompt analyzed. Narrative structure and animations will be applied during render.";
+    }
     return out.str();
 }
 

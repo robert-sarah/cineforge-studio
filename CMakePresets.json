@@ -45,6 +45,10 @@
     {
       "name": "portable-cli",
       "configurePreset": "portable-cli"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release"
     }
   ]
 }

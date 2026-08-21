@@ -8,6 +8,7 @@
 namespace ova {
 
 class TimelineWidget final : public QWidget {
+    Q_OBJECT
 public:
     explicit TimelineWidget(QWidget* parent = nullptr);
 
@@ -15,12 +16,21 @@ public:
     void setStyleName(const QString& styleName);
     void setCurrentTime(double seconds);
     void setTracks(const std::vector<TimelineTrack>& tracks);
+    void addWaveform(std::size_t mediaIndex, const AudioWaveform& waveform);
     void setSnapEnabled(bool enabled) noexcept { snapEnabled_ = enabled; }
     void cutSelectedAtPlayhead();
     void deleteSelectedClip();
     void undo();
     void redo();
     const std::vector<TimelineTrack>& tracks() const noexcept { return tracks_; }
+    
+    int selectedTrack() const noexcept { return selectedTrack_; }
+    int selectedClip() const noexcept { return selectedClip_; }
+    TimelineClip* getSelectedClip();
+
+signals:
+    void clipSelected(int trackIndex, int clipIndex);
+    void selectionCleared();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -42,6 +52,7 @@ private:
 
     std::vector<MediaItem> media_;
     std::vector<TimelineTrack> tracks_;
+    std::unordered_map<std::size_t, AudioWaveform> waveforms_;
     QString styleName_ = QStringLiteral("MrBeast / High Energy");
     double currentTime_ = 0.0;
     double pixelsPerSecond_ = 105.0;

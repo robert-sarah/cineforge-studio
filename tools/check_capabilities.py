@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Diagnostic local des capacités CineForge.
+"""Local diagnostic of CineForge capabilities.
 
-Le script ne contacte aucun service distant. Il inspecte uniquement ffmpeg,
-ffprobe et les encodeurs visibles dans l'environnement courant.
+The script does not contact any remote service. It only inspects ffmpeg,
+ffprobe, and visible encoders in the current environment.
 """
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ def command_output(command: list[str]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Diagnostiquer les capacités locales de CineForge")
-    parser.add_argument("--output", type=Path, help="Écrire le rapport JSON à cet emplacement")
+    parser = argparse.ArgumentParser(description="Diagnose local CineForge capabilities")
+    parser.add_argument("--output", type=Path, help="Write the JSON report to this location")
     args = parser.parse_args()
 
     ffmpeg = shutil.which("ffmpeg")

@@ -16,6 +16,8 @@ class QPushButton;
 class QComboBox;
 class QCheckBox;
 class QSpinBox;
+class QDoubleSpinBox;
+class QSlider;
 class QMediaPlayer;
 class QAudioOutput;
 class QVideoWidget;
@@ -33,6 +35,7 @@ private:
     QWidget* makeMediaDock();
     QWidget* makeInspectorDock();
     QWidget* makeAgentDock();
+    QWidget* makeAudioMixerDock();
     QWidget* makePreview();
     QWidget* makeTimelinePanel();
     void chooseFolder();
@@ -57,8 +60,23 @@ private:
     QLineEdit* whisperModelEdit_ = nullptr;
     QLineEdit* piperModelEdit_ = nullptr;
     QLineEdit* scriptEdit_ = nullptr;
+    QPlainTextEdit* promptEdit_ = nullptr;
     QListWidget* mediaList_ = nullptr;
     QPlainTextEdit* agentLog_ = nullptr;
+    
+    // Clip Inspector
+    QDoubleSpinBox* clipOpacitySpin_ = nullptr;
+    QDoubleSpinBox* clipScaleSpin_ = nullptr;
+    QDoubleSpinBox* clipPosXSpin_ = nullptr;
+    QDoubleSpinBox* clipPosYSpin_ = nullptr;
+    QDoubleSpinBox* clipRotationSpin_ = nullptr;
+    QComboBox* clipBlendModeCombo_ = nullptr;
+    QComboBox* clipTransitionInCombo_ = nullptr;
+    QComboBox* clipTransitionOutCombo_ = nullptr;
+    QComboBox* clipMaskCombo_ = nullptr;
+    QPushButton* addKeyframeBtn_ = nullptr;
+    QLineEdit* clipTextOverlayEdit_ = nullptr;
+    QComboBox* clipTextStyleCombo_ = nullptr;
     QPlainTextEdit* renderLog_ = nullptr;
     QProgressBar* progressBar_ = nullptr;
     QPushButton* renderButton_ = nullptr;
@@ -77,6 +95,12 @@ private:
     QCheckBox* normalizeAudioCheck_ = nullptr;
     QCheckBox* duckMusicCheck_ = nullptr;
     QCheckBox* proxyCheck_ = nullptr;
+    
+    // Audio Mixer
+    QSlider* masterVolumeSlider_ = nullptr;
+    QSlider* voiceVolumeSlider_ = nullptr;
+    QSlider* musicVolumeSlider_ = nullptr;
+    QProgressBar* masterMeter_ = nullptr;
     QLineEdit* agentModelEdit_ = nullptr;
     QSpinBox* crfSpin_ = nullptr;
     QSpinBox* proxyWidthSpin_ = nullptr;

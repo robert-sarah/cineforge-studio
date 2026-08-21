@@ -35,6 +35,8 @@ if (CINEFORGE_BUILD_GUI)
             src/gui/MainWindow.cpp
             src/gui/TimelineWidget.cpp
             src/gui/main_gui.cpp
+            include/ova/MainWindow.hpp
+            include/ova/TimelineWidget.hpp
         )
         target_link_libraries(cineforge-studio PRIVATE cineforge_core Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets)
         target_include_directories(cineforge-studio PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -49,8 +51,8 @@ if (TARGET cineforge-studio)
     install(TARGETS cineforge-studio RUNTIME DESTINATION bin)
 endif()
 
-# Les outils et la documentation sont installés sans embarquer les poids IA,
-# qui restent optionnels et soumis à leurs licences respectives.
+# Tools and documentation are installed without embedding AI weights,
+# which remain optional and subject to their respective licenses.
 install(DIRECTORY tools/ DESTINATION share/cineforge/tools
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE)

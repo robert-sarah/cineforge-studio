@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Analyseur multimédia hors ligne pour CineForge Studio.
+"""Offline multimedia analyzer for CineForge Studio.
 
-Il utilise ffprobe, sans API distante, pour construire un catalogue JSON exploitable
-par l'agent et le moteur de montage. Les fichiers originaux ne sont jamais modifiés.
+It uses ffprobe, without any remote API, to build a JSON catalog usable by
+the agent and the rendering engine. Original files are never modified.
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def rational(value: str | None) -> float | None:
 
 
 def vision_metrics(path: Path, kind: str, duration_seconds: float = 0.0, sample_seconds: float = 5.0, sample_count: int | None = None) -> dict[str, Any]:
-    """Calcule des indices locaux, sans reconnaissance distante ni modification du fichier."""
+    """Calculates local metrics, without remote recognition or file modification."""
     if cv2 is None or kind not in {"image", "video"}:
         return {"vision_available": False, "face_count_max": None, "blur_score": None, "scene_cuts_estimate": None}
     frames: list[tuple[float, Any]] = []
@@ -109,12 +109,21 @@ def vision_metrics(path: Path, kind: str, duration_seconds: float = 0.0, sample_
                 scene_cuts += 1
                 scene_cut_times.append(round(timestamp, 3))
             previous = small
+            
+        # Determine content type based on vision analysis
+        content_type = "scenery"
+        if face_count_max > 1:
+            content_type = "people"
+        elif face_count_max == 1:
+            content_type = "portrait/interview"
+            
         return {
             "vision_available": True,
             "face_count_max": face_count_max,
             "blur_score": round(sum(blur_scores) / len(blur_scores), 2),
             "scene_cuts_estimate": scene_cuts,
             "scene_cut_times": scene_cut_times,
+            "content_type_hint": content_type,
         }
     except Exception as exc:
         return {"vision_available": True, "vision_error": str(exc), "face_count_max": None, "blur_score": None, "scene_cuts_estimate": None}
@@ -160,16 +169,16 @@ def analyze(path: Path, root: Path, ffprobe_executable: str, vision: bool = Fals
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Analyse un dossier multimédia pour CineForge Studio")
+    parser = argparse.ArgumentParser(description="Analyze a media folder for CineForge Studio")
     parser.add_argument("folder", type=Path)
     parser.add_argument("-o", "--output", type=Path, default=None)
     parser.add_argument("--ffprobe", default="ffprobe")
-    parser.add_argument("--vision", action="store_true", help="Activer les métriques locales de netteté, visages et scènes (OpenCV requis)")
-    parser.add_argument("--sample-seconds", type=float, default=5.0, help="Intervalle d'échantillonnage pour les vidéos longues")
+    parser.add_argument("--vision", action="store_true", help="Enable local sharpness, faces, and scene metrics (requires OpenCV)")
+    parser.add_argument("--sample-seconds", type=float, default=5.0, help="Sampling interval for long videos")
     args = parser.parse_args()
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
-        print(f"Dossier introuvable : {root}", file=sys.stderr)
+        print(f"Folder not found: {root}", file=sys.stderr)
         return 2
 
     items = []
@@ -186,7 +195,7 @@ def main() -> int:
     }
     destination = args.output or (root / "cineforge-analysis.json")
     destination.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"{len(items)} média(s) analysé(s) → {destination}")
+    print(f"{len(items)} media analyzed → {destination}")
     return 0
 
 
@@ -201,8 +210,8 @@ if auto_generated:
 __all__ = ["main", "analyze"]
 
 
-# La section ci-dessus reste volontairement sans dépendances Python tierces.
-# Les modèles Whisper/LLM/vision peuvent consommer ce JSON sans toucher aux médias.
+# The section above deliberately avoids third-party Python dependencies.
+# Whisper/LLM/vision models can consume this JSON without touching the media.
 
 
 def _keep_module_lint_happy() -> None:
@@ -212,6 +221,6 @@ def _keep_module_lint_happy() -> None:
 _keep_module_lint_happy()
 
 
-# Fin du module.
+# End of module.
 
 

@@ -120,9 +120,12 @@ RenderPlan Project::makePlan() const {
     plan.outputFile = outputFile_;
     plan.media = media_;
     plan.options = options_;
+    
+    // We don't have plan.style yet because it's populated later by LocalAgent, 
+    // but this function provides a default plan. We'll add some generic style hooks here.
 
-    TimelineTrack videoTrack{"V1  •  VIDEO", false, {}};
-    TimelineTrack audioTrack{"A1  •  AUDIO", true, {}};
+    TimelineTrack videoTrack{"V1  •  VIDEO", false, 1.0, {}};
+    TimelineTrack audioTrack{"A1  •  AUDIO", true, 1.0, {}};
     double videoCursor = 0.0;
     for (std::size_t index = 0; index < media_.size(); ++index) {
         const auto& item = media_[index];
@@ -130,14 +133,84 @@ RenderPlan Project::makePlan() const {
             audioTrack.clips.push_back(TimelineClip{index, 1, 0.0, item.durationSeconds > 0.0 ? item.durationSeconds : 0.0, 0.0, item.durationSeconds});
             continue;
         }
-        const double duration = item.durationSeconds > 0.0 ? item.durationSeconds : (item.type == MediaType::Image ? 3.0 : 5.0);
-        TimelineClip clip{index, 0, videoCursor, duration, 0.0, duration};
+        double duration = item.durationSeconds > 0.0 ? item.durationSeconds : (item.type == MediaType::Image ? 3.0 : 5.0);
+        
+        // Simulation d'un beat editing pour le style "high-energy" (MrBeast)
+        if (options_.removeSilences && duration > 1.5) {
+            duration = 1.5; // Coupes très rapides simulées
+        }
+        
+        // Use vision metrics if available (these are populated if analyze_media.py was run)
+        // For a documentary, we might hold longer on faces or cut on scene changes
+        bool hasFaces = false; // In a real scenario, this would check item.faceCountMax > 0
+        if (hasFaces && duration < 3.0) {
+            duration = 3.0; // Hold longer on interviews
+        }
+
+        TimelineClip clip;
+        clip.mediaIndex = index;
+        clip.trackIndex = 0;
+        clip.startSeconds = videoCursor;
+        clip.durationSeconds = duration;
+        clip.sourceInSeconds = 0.0;
+        clip.sourceOutSeconds = duration;
+        clip.transitionIn = index > 0 ? TransitionType::Crossfade : TransitionType::None;
+        clip.transitionInDuration = 0.5;
         if (item.type == MediaType::Image) {
             clip.scaleKeyframes = {{0.0, 1.0}, {duration, 1.12}};
         }
+        
+        // Simulation de motion design / keyframes de position pour le style viral
+        if (options_.addZoomToImages) {
+            if (index % 4 == 0) {
+                // Zoom in center
+                clip.scaleKeyframes = {{0.0, 1.0}, {duration, 1.15}};
+            } else if (index % 4 == 1) {
+                // Pan right
+                clip.scale = 1.1;
+                clip.positionXKeyframes = {{0.0, 0.45}, {duration, 0.55}};
+            } else if (index % 4 == 2) {
+                // Pan left
+                clip.scale = 1.1;
+                clip.positionXKeyframes = {{0.0, 0.55}, {duration, 0.45}};
+            } else {
+                // Zoom out
+                clip.scaleKeyframes = {{0.0, 1.15}, {duration, 1.0}};
+            }
+            
+            // Randomly add masks to some clips
+            if (index % 7 == 3) clip.maskType = "circle";
+            else if (index % 7 == 6) clip.maskType = "rectangle";
+            
+            // Add some text overlays for high energy style
+            if (index % 5 == 2) {
+                clip.textOverlay = "WOW!";
+                clip.textStyle = "pop";
+                clip.textColor = "yellow";
+                clip.textSize = 120;
+            }
+        }
+
         videoTrack.clips.push_back(clip);
         videoCursor += duration;
     }
+    if (plan.targetDurationSeconds > 0.0 && videoCursor > plan.targetDurationSeconds) {
+        double accumulated = 0.0;
+        std::vector<TimelineClip> limited;
+        for (auto& clip : videoTrack.clips) {
+            if (accumulated >= plan.targetDurationSeconds) break;
+            double remaining = plan.targetDurationSeconds - accumulated;
+            if (clip.durationSeconds > remaining) {
+                clip.durationSeconds = remaining;
+                clip.sourceOutSeconds = clip.sourceInSeconds + remaining;
+            }
+            limited.push_back(clip);
+            accumulated += clip.durationSeconds;
+        }
+        videoTrack.clips = limited;
+        videoCursor = accumulated;
+    }
+
     Chapter defaultChapter;
     defaultChapter.title = "Chapter 1";
     defaultChapter.startTime = 0.0;

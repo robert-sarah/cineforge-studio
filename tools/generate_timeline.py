@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Générateur de timeline narrative long-form pour CineForge Studio.
+"""Long-form narrative timeline generator for CineForge Studio.
 
-Le script consomme le catalogue produit par ``analyze_media.py`` et génère un
-projet JSON .cineforge. Il conserve l'ordre narratif des fichiers, filtre les
-plans trop courts ou trop flous, crée des sous-clips, puis répartit la timeline
-en chapitres afin de rendre possibles les projets de plusieurs heures.
+The script consumes the catalog produced by ``analyze_media.py`` and generates a
+.cineforge JSON project. It preserves the narrative order of files, filters out
+shots that are too short or blurry, creates sub-clips, and then splits the timeline
+into chapters to enable multi-hour projects.
 
-Le traitement est entièrement local et ne modifie jamais les médias source.
+Processing is entirely local and never modifies source media.
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ def item_duration(item: dict[str, Any]) -> float:
 
 
 def quality_score(item: dict[str, Any]) -> float:
-    """Calcule un score déterministe, explicable et sans modèle distant."""
+    """Calculates a deterministic, explainable score without a remote model."""
     blur = float(item.get("blur_score") or 0.0)
     faces = int(item.get("face_count_max", item.get("max_faces", 0)) or 0)
     scene_cuts = int(item.get("scene_cuts_estimate") or 0)
     quality = float(item.get("quality_hint") or 0.0)
-    # La netteté est plafonnée pour éviter qu'un très grand nombre domine tout.
+    # Sharpness is capped to prevent a very large number from dominating.
     sharpness = min(100.0, math.log1p(max(0.0, blur)) * 8.0)
     return round(sharpness + min(30.0, faces * 6.0) + min(15.0, scene_cuts * 1.5) + quality * 10.0, 3)
 
@@ -53,7 +53,7 @@ def select_clips(media: list[dict[str, Any]], style: str, preserve_order: bool =
             continue
 
         blur = float(item.get("blur_score") or 0.0)
-        # Sans analyse vision, blur_score est absent et le plan reste admissible.
+        # Without vision analysis, blur_score is absent and the shot remains eligible.
         if blur and blur < 30.0:
             continue
 
@@ -74,8 +74,8 @@ def select_clips(media: list[dict[str, Any]], style: str, preserve_order: bool =
         source_order += 1
 
     if preserve_order:
-        # L'agent peut ensuite réordonner, mais le défaut conserve la continuité
-        # du tournage au lieu de créer un montage artificiellement désordonné.
+        # The agent can later reorder, but the default preserves shooting continuity
+        # instead of creating an artificially disordered edit.
         clips.sort(key=lambda clip: (clip["source_order"], clip["source_in"]))
     else:
         clips.sort(key=lambda clip: (-clip["score"], clip["source_order"], clip["source_in"]))
@@ -170,7 +170,7 @@ def build_project(input_dir: Path, output_file: Path, catalog_path: Path, style:
     for clip in clips:
         if current_chapter is None or (chapter_time >= chapter_seconds and current_chapter["tracks"][0]["clips"]):
             current_chapter = {
-                "title": f"Chapitre {chapter_index}",
+                "title": f"Chapter {chapter_index}",
                 "startTime": round(global_time, 3),
                 "duration": 0.0,
                 "tracks": [{"name": "V1", "audio": False, "clips": []}],
@@ -221,7 +221,7 @@ def build_project(input_dir: Path, output_file: Path, catalog_path: Path, style:
         "offline": True,
         "media": entries,
         "chapters": chapters,
-        # Compatibilité avec les versions qui ne savent afficher qu'une piste plate.
+        # Compatibility with versions that only display a flat track.
         "tracks": chapters[0]["tracks"] if chapters else [],
         "narrative": {
             "chapterCount": len(chapters),
@@ -236,25 +236,25 @@ def build_project(input_dir: Path, output_file: Path, catalog_path: Path, style:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Génère une timeline CineForge long-form par chapitres")
+    parser = argparse.ArgumentParser(description="Generates a long-form chapter-based CineForge timeline")
     parser.add_argument("folder", type=Path)
     parser.add_argument("catalog", type=Path)
     parser.add_argument("--output", type=Path, default=Path("auto_project.cineforge"))
     parser.add_argument("--style", default="standard")
     parser.add_argument("--chapter-minutes", type=float, default=10.0)
-    parser.add_argument("--best-first", action="store_true", help="Ordonner par score au lieu de conserver l'ordre source")
-    parser.add_argument("--max-duration", type=float, default=0.0, help="Durée maximale en secondes; 0 signifie sans limite")
+    parser.add_argument("--best-first", action="store_true", help="Order by score instead of preserving source order")
+    parser.add_argument("--max-duration", type=float, default=0.0, help="Maximum duration in seconds; 0 means no limit")
     args = parser.parse_args()
 
     if not args.catalog.exists():
-        print(f"Catalogue introuvable : {args.catalog}", file=sys.stderr)
+        print(f"Catalog not found: {args.catalog}", file=sys.stderr)
         return 1
     project = build_project(args.folder, args.output, args.catalog, args.style,
                             chapter_minutes=args.chapter_minutes,
                             preserve_order=not args.best_first,
                             max_duration=args.max_duration)
-    print(f"Projet généré : {args.output} — {len(project['chapters'])} chapitre(s), "
-          f"{project['narrative']['durationSeconds']:.1f} seconde(s)")
+    print(f"Project generated: {args.output} — {len(project['chapters'])} chapter(s), "
+          f"{project['narrative']['durationSeconds']:.1f} second(s)")
     return 0
 
 

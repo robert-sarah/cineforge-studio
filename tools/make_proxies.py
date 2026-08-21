@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère des proxies de montage dans un cache séparé, sans toucher aux originaux."""
+"""Generates editing proxies in a separate cache, without modifying originals."""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mpeg", ".
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Créer des proxies vidéo CineForge")
+    parser = argparse.ArgumentParser(description="Create CineForge video proxies")
     parser.add_argument("folder", type=Path)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--width", type=int, default=960)
@@ -19,7 +19,7 @@ def main() -> int:
     args = parser.parse_args()
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
-        print(f"Dossier introuvable : {root}", file=sys.stderr)
+        print(f"Folder not found: {root}", file=sys.stderr)
         return 2
     output = (args.output or (root / ".cineforge-cache" / "proxies")).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -38,10 +38,10 @@ def main() -> int:
         try:
             subprocess.run(command, check=True)
             processed += 1
-            print(f"Proxy : {source.relative_to(root)} -> {destination.relative_to(output)}")
+            print(f"Proxy: {source.relative_to(root)} -> {destination.relative_to(output)}")
         except (OSError, subprocess.CalledProcessError) as exc:
-            print(f"Échec proxy {source}: {exc}", file=sys.stderr)
-    print(f"{processed} proxy(s) créé(s) dans {output}")
+            print(f"Proxy failed for {source}: {exc}", file=sys.stderr)
+    print(f"{processed} proxy(s) created in {output}")
     return 0
 
 

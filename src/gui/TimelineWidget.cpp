@@ -1,5 +1,6 @@
 #include "ova/TimelineWidget.hpp"
 
+
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -46,6 +47,11 @@ void TimelineWidget::setTracks(const std::vector<TimelineTrack>& tracks) {
     selectedTrack_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
     selectedClip_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
     currentTime_ = 0.0;
+    update();
+}
+
+void TimelineWidget::addWaveform(std::size_t mediaIndex, const AudioWaveform& waveform) {
+    waveforms_[mediaIndex] = waveform;
     update();
 }
 
@@ -125,7 +131,11 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
         const int y = kHeaderHeight + track * kTrackHeight;
         painter.fillRect(0, y, kLabelWidth, kTrackHeight, track % 2 ? QColor("#20232b") : QColor("#1d2027"));
         painter.setPen(QColor("#c1c7d4"));
-        painter.drawText(12, y + 30, QString::fromStdString(tracks_[track].name));
+        painter.drawText(12, y + 22, QString::fromStdString(tracks_[track].name));
+        if (tracks_[track].audio) {
+            painter.setPen(QColor("#808a9d"));
+            painter.drawText(12, y + 38, QStringLiteral("Vol: %1").arg(QString::number(tracks_[track].volume, 'f', 2)));
+        }
         painter.setPen(QColor("#2e333e"));
         painter.drawLine(0, y + kTrackHeight - 1, width(), y + kTrackHeight - 1);
 
@@ -144,8 +154,52 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
                 ? QString::fromStdString(media_[clip.mediaIndex].path.filename().string())
                 : QStringLiteral("Clip");
             painter.drawText(QRect(x + 9, y + 20, std::max(0, w - 16), 18), Qt::TextSingleLine, label);
+            
+            // Draw Keyframes
+            if (!clip.scaleKeyframes.empty() || !clip.positionXKeyframes.empty()) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor("#ffb74d"));
+                for (const auto& kf : clip.scaleKeyframes) {
+                    int kx = x + static_cast<int>(kf.timeSeconds * pixelsPerSecond_);
+                    if (kx >= x && kx <= x + w) {
+                        QPolygon diamond;
+                        diamond << QPoint(kx, y + 22) << QPoint(kx + 4, y + 26) << QPoint(kx, y + 30) << QPoint(kx - 4, y + 26);
+                        painter.drawPolygon(diamond);
+                    }
+                }
+            }
+
+            // Draw Transitions
+            if (clip.transitionIn != TransitionType::None && clip.transitionInDuration > 0.0) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(255, 255, 255, 40));
+                int tw = static_cast<int>(clip.transitionInDuration * pixelsPerSecond_);
+                QPolygon fade;
+                fade << QPoint(x + 2, y + kTrackHeight - 7) << QPoint(x + 2 + tw, y + 7) << QPoint(x + 2 + tw, y + kTrackHeight - 7);
+                painter.drawPolygon(fade);
+            }
+
             painter.setPen(QColor(255, 255, 255, 80));
-            for (int thumb = x + 7; thumb < x + w - 8; thumb += 52) painter.drawLine(thumb, y + 10, thumb, y + kTrackHeight - 10);
+            
+            if (tracks_[track].audio && waveforms_.count(clip.mediaIndex)) {
+                const auto& wave = waveforms_.at(clip.mediaIndex);
+                if (!wave.samples.empty() && wave.samplesPerSecond > 0) {
+                    painter.setPen(QColor(255, 255, 255, 120));
+                    for (int i = 0; i < w - 4; ++i) {
+                        double t = clip.sourceInSeconds + (i / pixelsPerSecond_);
+                        if (t >= clip.sourceOutSeconds) break;
+                        std::size_t sampleIndex = static_cast<std::size_t>(t * wave.samplesPerSecond);
+                        if (sampleIndex < wave.samples.size()) {
+                            int amp = static_cast<int>(std::abs(wave.samples[sampleIndex]) * (kTrackHeight - 16));
+                            if (i > 0) {
+                                painter.drawLine(x + 2 + i, y + kTrackHeight / 2 - amp / 2, x + 2 + i, y + kTrackHeight / 2 + amp / 2);
+                            }
+                        }
+                    }
+                }
+            } else {
+                for (int thumb = x + 7; thumb < x + w - 8; thumb += 52) painter.drawLine(thumb, y + 10, thumb, y + kTrackHeight - 10);
+            }
         }
     }
 
@@ -175,12 +229,23 @@ void TimelineWidget::mousePressEvent(QMouseEvent* event) {
         dragOffset_ = timeAtX(event->pos().x()) - clip.startSeconds;
         dragging_ = true;
         currentTime_ = timeAtX(event->pos().x());
+        emit clipSelected(track, index);
     } else {
         currentTime_ = timeAtX(event->pos().x());
         selectedTrack_ = -1;
         selectedClip_ = -1;
+        emit selectionCleared();
     }
     update();
+}
+
+TimelineClip* TimelineWidget::getSelectedClip() {
+    if (selectedTrack_ >= 0 && selectedTrack_ < static_cast<int>(tracks_.size())) {
+        if (selectedClip_ >= 0 && selectedClip_ < static_cast<int>(tracks_[selectedTrack_].clips.size())) {
+            return &tracks_[selectedTrack_].clips[selectedClip_];
+        }
+    }
+    return nullptr;
 }
 
 void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
