@@ -53,6 +53,7 @@ private:
     QLineEdit* commandEdit_ = nullptr;
     QLineEdit* subtitlesEdit_ = nullptr;
     QLineEdit* voiceEdit_ = nullptr;
+    QLineEdit* musicEdit_ = nullptr;
     QLineEdit* whisperModelEdit_ = nullptr;
     QLineEdit* piperModelEdit_ = nullptr;
     QLineEdit* scriptEdit_ = nullptr;
@@ -69,11 +70,16 @@ private:
     QStackedLayout* previewStack_ = nullptr;
     QComboBox* formatCombo_ = nullptr;
     QComboBox* fpsCombo_ = nullptr;
+    QComboBox* encoderCombo_ = nullptr;
     QComboBox* sortCombo_ = nullptr;
     QCheckBox* zoomCheck_ = nullptr;
     QCheckBox* subtitlesCheck_ = nullptr;
+    QCheckBox* normalizeAudioCheck_ = nullptr;
+    QCheckBox* duckMusicCheck_ = nullptr;
+    QCheckBox* proxyCheck_ = nullptr;
     QLineEdit* agentModelEdit_ = nullptr;
     QSpinBox* crfSpin_ = nullptr;
+    QSpinBox* proxyWidthSpin_ = nullptr;
     TimelineWidget* timeline_ = nullptr;
 };
 

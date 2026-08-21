@@ -1,5 +1,6 @@
 #include "ova/TimelineWidget.hpp"
 
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
@@ -24,6 +25,8 @@ TimelineWidget::TimelineWidget(QWidget* parent) : QWidget(parent) {
 void TimelineWidget::setMedia(const std::vector<MediaItem>& media) {
     media_ = media;
     rebuildDefaultTimeline();
+    undoStack_.clear();
+    redoStack_.clear();
     update();
 }
 
@@ -40,6 +43,7 @@ void TimelineWidget::setCurrentTime(double seconds) {
 void TimelineWidget::setTracks(const std::vector<TimelineTrack>& tracks) {
     tracks_ = tracks;
     if (tracks_.empty()) rebuildDefaultTimeline();
+    selectedTrack_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
     selectedClip_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
     currentTime_ = 0.0;
     update();
@@ -59,6 +63,7 @@ void TimelineWidget::rebuildDefaultTimeline() {
         tracks_[0].clips.push_back(TimelineClip{i, 0, cursor, duration, 0.0, duration});
         cursor += duration;
     }
+    selectedTrack_ = tracks_[0].clips.empty() ? -1 : 0;
     selectedClip_ = tracks_[0].clips.empty() ? -1 : 0;
     currentTime_ = 0.0;
 }
@@ -76,10 +81,16 @@ double TimelineWidget::snapTime(double seconds) const {
     return std::max(0.0, std::round(seconds / kGridStep) * kGridStep);
 }
 
-int TimelineWidget::clipAt(const QPoint& point) const {
+int TimelineWidget::trackAt(const QPoint& point) const {
     if (point.y() < kHeaderHeight) return -1;
     const int trackIndex = (point.y() - kHeaderHeight) / kTrackHeight;
     if (trackIndex < 0 || trackIndex >= static_cast<int>(tracks_.size())) return -1;
+    return trackIndex;
+}
+
+int TimelineWidget::clipAt(const QPoint& point) const {
+    const int trackIndex = trackAt(point);
+    if (trackIndex < 0) return -1;
     const auto& clips = tracks_[trackIndex].clips;
     const double time = timeAtX(point.x());
     for (int i = 0; i < static_cast<int>(clips.size()); ++i) {
@@ -123,7 +134,7 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
             const auto& clip = clips[index];
             const int x = xAtTime(clip.startSeconds);
             const int w = std::max(18, xAtTime(clip.startSeconds + clip.durationSeconds) - x);
-            const bool selected = track == 0 && index == selectedClip_;
+            const bool selected = track == selectedTrack_ && index == selectedClip_;
             const QColor base = selected ? QColor("#5b55df") : (track == 0 ? QColor("#304a72") : QColor("#3d5e4d"));
             painter.setPen(selected ? QColor("#aaa5ff") : QColor("#526b95"));
             painter.setBrush(base);
@@ -154,23 +165,28 @@ void TimelineWidget::mousePressEvent(QMouseEvent* event) {
         update();
         return;
     }
+    const int track = trackAt(event->pos());
     const int index = clipAt(event->pos());
-    if (index >= 0) {
+    if (track >= 0 && index >= 0) {
+        rememberEdit();
+        selectedTrack_ = track;
         selectedClip_ = index;
-        const auto& clip = tracks_[0].clips[index];
+        const auto& clip = tracks_[track].clips[index];
         dragOffset_ = timeAtX(event->pos().x()) - clip.startSeconds;
         dragging_ = true;
         currentTime_ = timeAtX(event->pos().x());
     } else {
         currentTime_ = timeAtX(event->pos().x());
+        selectedTrack_ = -1;
         selectedClip_ = -1;
     }
     update();
 }
 
 void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
-    if (!dragging_ || selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
-    auto& clip = tracks_[0].clips[selectedClip_];
+    if (!dragging_ || selectedTrack_ < 0 || selectedTrack_ >= static_cast<int>(tracks_.size()) ||
+        selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[selectedTrack_].clips.size())) return;
+    auto& clip = tracks_[selectedTrack_].clips[selectedClip_];
     clip.startSeconds = snapTime(timeAtX(event->pos().x()) - dragOffset_);
     currentTime_ = clip.startSeconds + dragOffset_;
     update();
@@ -181,8 +197,10 @@ void TimelineWidget::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void TimelineWidget::mouseDoubleClickEvent(QMouseEvent* event) {
+    const int track = trackAt(event->pos());
     const int index = clipAt(event->pos());
-    if (index >= 0) {
+    if (track >= 0 && index >= 0) {
+        selectedTrack_ = track;
         selectedClip_ = index;
         currentTime_ = timeAtX(event->pos().x());
         cutSelectedAtPlayhead();
@@ -201,8 +219,10 @@ void TimelineWidget::wheelEvent(QWheelEvent* event) {
 }
 
 void TimelineWidget::cutSelectedAtPlayhead() {
-    if (selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
-    auto& clips = tracks_[0].clips;
+    if (selectedTrack_ < 0 || selectedTrack_ >= static_cast<int>(tracks_.size()) ||
+        selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[selectedTrack_].clips.size())) return;
+    rememberEdit();
+    auto& clips = tracks_[selectedTrack_].clips;
     auto clip = clips[selectedClip_];
     const double relative = currentTime_ - clip.startSeconds;
     if (relative <= 0.15 || relative >= clip.durationSeconds - 0.15) return;
@@ -219,10 +239,54 @@ void TimelineWidget::cutSelectedAtPlayhead() {
 }
 
 void TimelineWidget::deleteSelectedClip() {
-    if (selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
-    tracks_[0].clips.erase(tracks_[0].clips.begin() + selectedClip_);
-    selectedClip_ = std::min(selectedClip_, static_cast<int>(tracks_[0].clips.size()) - 1);
+    if (selectedTrack_ < 0 || selectedTrack_ >= static_cast<int>(tracks_.size()) ||
+        selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[selectedTrack_].clips.size())) return;
+    rememberEdit();
+    auto& clips = tracks_[selectedTrack_].clips;
+    clips.erase(clips.begin() + selectedClip_);
+    selectedClip_ = std::min(selectedClip_, static_cast<int>(clips.size()) - 1);
+    if (selectedClip_ < 0) selectedTrack_ = -1;
     update();
+}
+
+void TimelineWidget::rememberEdit() {
+    undoStack_.push_back(tracks_);
+    if (undoStack_.size() > 100) undoStack_.erase(undoStack_.begin());
+    redoStack_.clear();
+}
+
+void TimelineWidget::undo() {
+    if (undoStack_.empty()) return;
+    redoStack_.push_back(tracks_);
+    tracks_ = undoStack_.back();
+    undoStack_.pop_back();
+    selectedTrack_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
+    selectedClip_ = selectedTrack_ < 0 ? -1 : 0;
+    update();
+}
+
+void TimelineWidget::redo() {
+    if (redoStack_.empty()) return;
+    undoStack_.push_back(tracks_);
+    tracks_ = redoStack_.back();
+    redoStack_.pop_back();
+    selectedTrack_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
+    selectedClip_ = selectedTrack_ < 0 ? -1 : 0;
+    update();
+}
+
+void TimelineWidget::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        deleteSelectedClip();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_S) {
+        cutSelectedAtPlayhead();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 } // namespace ova

@@ -59,6 +59,9 @@ RenderPlan LocalAgent::interpret(const std::string& instruction,
     plan.options.fps = 30;
     plan.options.addZoomToImages = true;
     plan.options.burnSubtitles = true;
+    plan.options.loudnessNormalization = true;
+    plan.options.duckMusicUnderVoice = true;
+    plan.options.useProxyPreview = false;
 
     if (text.find("paysage") != std::string::npos || text.find("youtube horizontal") != std::string::npos) {
         plan.options.width = 1920;
@@ -147,7 +150,9 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
         "Tu es l'agent local de CineForge Studio. Analyse la demande de montage et reponds uniquement avec un JSON compact. "
         "Schema: {\\\"style\\\":\\\"high-energy|cinematic|documentary|vlog|gaming|podcast|tutorial|standard\\\","
         "\\\"width\\\":1080 ou 1920,\\\"height\\\":1080 ou 1920,\\\"zoom\\\":true ou false,"
-        "\\\"subtitles\\\":true ou false,\\\"remove_silences\\\":true ou false}. Demande: " + instruction;
+        "\\\"subtitles\\\":true ou false,\\\"remove_silences\\\":true ou false,"
+        "\\\"normalize_audio\\\":true ou false,\\\"duck_music\\\":true ou false,"
+        "\\\"use_proxies\\\":true ou false}. Demande: " + instruction;
     {
         std::ofstream file(promptFile);
         file << prompt;
@@ -169,6 +174,9 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
     if (std::regex_search(output, match, std::regex(R"(\"zoom\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.addZoomToImages = match[1].str() == "true";
     if (std::regex_search(output, match, std::regex(R"(\"subtitles\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.burnSubtitles = match[1].str() == "true";
     if (std::regex_search(output, match, std::regex(R"(\"remove_silences\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.removeSilences = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"normalize_audio\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.loudnessNormalization = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"duck_music\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.duckMusicUnderVoice = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"use_proxies\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.useProxyPreview = match[1].str() == "true";
     std::filesystem::remove_all(work, ignored);
     return plan;
 }
@@ -178,7 +186,8 @@ std::string LocalAgent::explainPlan(const RenderPlan& plan) const {
     out << "Plan local : style=" << plan.style << ", format=" << plan.options.width << "x"
         << plan.options.height << " @ " << plan.options.fps << " fps, "
         << plan.media.size() << " média(s), zoom=" << (plan.options.addZoomToImages ? "oui" : "non")
-        << ", sous-titres=" << (plan.options.burnSubtitles ? "oui" : "non");
+        << ", sous-titres=" << (plan.options.burnSubtitles ? "oui" : "non")
+        << ", audio_pro=" << (plan.options.loudnessNormalization ? "oui" : "non");
     return out.str();
 }
 

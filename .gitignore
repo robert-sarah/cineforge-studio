@@ -11,3 +11,6 @@ models/*.json
 models/*.gguf
 .DS_Store
 CMakeUserPresets.json
+__pycache__/
+*.pyc
+.cineforge-cache/

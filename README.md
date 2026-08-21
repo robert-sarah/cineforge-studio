@@ -7,10 +7,13 @@
 - **Timeline Multipiste Interactive** : clips déplaçables, magnétisme, découpe, zoom et pistes audio/vidéo.
 - **Lecteur Vidéo Intégré** : prévisualisation du rendu directement dans l'interface via Qt Multimedia.
 - **Agent IA Local GGUF** : connexion à Llama 3 (8B) via `llama.cpp` pour comprendre les requêtes complexes et générer des plans de montage JSON.
-- **Analyseur Python Hors Ligne** : extraction des métadonnées avec `ffprobe` pour le montage automatique intelligent.
+- **Analyseur Python Hors Ligne** : extraction des métadonnées avec `ffprobe` et `OpenCV` pour la détection des visages, du flou et le montage intelligent.
+- **Proxies Vidéo 4K** : script Python pour générer des proxies légers et accélérer le montage des médias lourds.
 - **Sauvegarde de Projet** : format JSON `.cineforge` pour conserver et restaurer vos timelines et médias.
 - **Import Automatique** : détection d'images, vidéos et musiques, avec tri naturel et chronologique.
 - **Rendu FFmpeg Avancé** : génération de formats multiples, keyframes de zoom, sous-titres, et ducking/mixage audio.
+- **Encodeurs Matériels** : support natif de `NVENC`, `VAAPI` et `VideoToolbox` pour des exports très rapides.
+- **Historique d'Édition** : support complet du Undo/Redo dans la timeline interactive.
 - **Modèles de Montage** : MrBeast, Cinématique, Shorts, Vlog, Documentaire, Gaming, Podcast et Tutoriel.
 - **Interface Qt Professionnelle** : thématique sombre, inspecteur, panneaux dockables et gestionnaire de modèles locaux.
 

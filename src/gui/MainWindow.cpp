@@ -137,8 +137,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(importAction, &QAction::triggered, this, [this] { chooseFolder(); });
     connect(exportAction, &QAction::triggered, this, [this] { startRender(); });
     connect(saveAction, &QAction::triggered, this, [this] { saveProject(); });
-    connect(undoAction, &QAction::triggered, this, [this] { appendLog(QStringLiteral("Annulation : prête pour les opérations de timeline.")); });
-    connect(redoAction, &QAction::triggered, this, [this] { appendLog(QStringLiteral("Rétablissement : prête pour les opérations de timeline.")); });
+    connect(undoAction, &QAction::triggered, this, [this] {
+        if (timeline_) timeline_->undo();
+        appendLog(QStringLiteral("Annulation appliquée à la timeline."));
+    });
+    connect(redoAction, &QAction::triggered, this, [this] {
+        if (timeline_) timeline_->redo();
+        appendLog(QStringLiteral("Rétablissement appliqué à la timeline."));
+    });
 
     auto* fileMenu = menuBar()->addMenu(QStringLiteral("Fichier"));
     fileMenu->addAction(importAction);
@@ -341,15 +347,28 @@ QWidget* MainWindow::makeInspectorDock() {
     crfSpin_ = new QSpinBox(exportBox);
     crfSpin_->setRange(16, 30);
     crfSpin_->setValue(20);
+    encoderCombo_ = new QComboBox(exportBox);
+    encoderCombo_->addItem(QStringLiteral("CPU • H.264"), QStringLiteral("libx264"));
+    encoderCombo_->addItem(QStringLiteral("NVIDIA • NVENC"), QStringLiteral("h264_nvenc"));
+    encoderCombo_->addItem(QStringLiteral("Linux • VAAPI"), QStringLiteral("h264_vaapi"));
+    encoderCombo_->addItem(QStringLiteral("Apple • VideoToolbox"), QStringLiteral("h264_videotoolbox"));
     exportForm->addRow(QStringLiteral("Format"), formatCombo_);
     exportForm->addRow(QStringLiteral("Images/s"), fpsCombo_);
     exportForm->addRow(QStringLiteral("Qualité"), crfSpin_);
+    exportForm->addRow(QStringLiteral("Encodeur"), encoderCombo_);
     zoomCheck_ = new QCheckBox(QStringLiteral("Zoom animé sur les images"), exportBox);
     zoomCheck_->setChecked(true);
     subtitlesCheck_ = new QCheckBox(QStringLiteral("Incruster les sous-titres"), exportBox);
     subtitlesCheck_->setChecked(true);
     exportForm->addRow(zoomCheck_);
     exportForm->addRow(subtitlesCheck_);
+    proxyCheck_ = new QCheckBox(QStringLiteral("Préparer des proxies pour les vidéos lourdes"), exportBox);
+    proxyCheck_->setChecked(false);
+    proxyWidthSpin_ = new QSpinBox(exportBox);
+    proxyWidthSpin_->setRange(320, 1920);
+    proxyWidthSpin_->setValue(960);
+    exportForm->addRow(proxyCheck_);
+    exportForm->addRow(QStringLiteral("Largeur proxy"), proxyWidthSpin_);
     layout->addWidget(exportBox);
 
     layout->addWidget(caption(QStringLiteral("VOIX & SOUS-TITRES"), panel));
@@ -359,6 +378,8 @@ QWidget* MainWindow::makeInspectorDock() {
     voiceEdit_->setPlaceholderText(QStringLiteral("voiceover.wav / mp3"));
     subtitlesEdit_ = new QLineEdit(audioBox);
     subtitlesEdit_->setPlaceholderText(QStringLiteral("subtitles.srt"));
+    musicEdit_ = new QLineEdit(audioBox);
+    musicEdit_->setPlaceholderText(QStringLiteral("music.mp3 (optionnel)"));
     scriptEdit_ = new QLineEdit(audioBox);
     scriptEdit_->setPlaceholderText(QStringLiteral("Texte de narration Piper"));
     piperModelEdit_ = new QLineEdit(audioBox);
@@ -366,8 +387,15 @@ QWidget* MainWindow::makeInspectorDock() {
     whisperModelEdit_ = new QLineEdit(audioBox);
     whisperModelEdit_->setPlaceholderText(QStringLiteral("models/ggml-small.bin"));
     audioForm->addRow(QStringLiteral("Voix"), voiceEdit_);
+    audioForm->addRow(QStringLiteral("Musique"), musicEdit_);
     audioForm->addRow(QStringLiteral("Sous-titres"), subtitlesEdit_);
     audioForm->addRow(QStringLiteral("Script"), scriptEdit_);
+    normalizeAudioCheck_ = new QCheckBox(QStringLiteral("Normaliser le niveau sonore"), audioBox);
+    normalizeAudioCheck_->setChecked(true);
+    duckMusicCheck_ = new QCheckBox(QStringLiteral("Baisser la musique sous la voix"), audioBox);
+    duckMusicCheck_->setChecked(true);
+    audioForm->addRow(normalizeAudioCheck_);
+    audioForm->addRow(duckMusicCheck_);
     audioForm->addRow(QStringLiteral("Piper"), piperModelEdit_);
     audioForm->addRow(QStringLiteral("Whisper"), whisperModelEdit_);
     layout->addWidget(audioBox);
@@ -626,8 +654,14 @@ void MainWindow::startRender() {
     plan.options.burnSubtitles = subtitlesCheck_->isChecked();
     plan.options.addZoomToImages = zoomCheck_->isChecked();
     plan.options.crf = crfSpin_->value();
+    if (encoderCombo_) plan.options.videoEncoder = encoderCombo_->currentData().toString().toStdString();
+    plan.options.useProxyPreview = proxyCheck_ && proxyCheck_->isChecked();
+    plan.options.proxyWidth = proxyWidthSpin_ ? proxyWidthSpin_->value() : 960;
+    plan.options.loudnessNormalization = !normalizeAudioCheck_ || normalizeAudioCheck_->isChecked();
+    plan.options.duckMusicUnderVoice = !duckMusicCheck_ || duckMusicCheck_->isChecked();
     plan.options.subtitlesFile = subtitlesEdit_->text().toStdString();
     plan.options.voiceOverFile = voiceEdit_->text().toStdString();
+    plan.options.musicFile = musicEdit_ ? musicEdit_->text().toStdString() : std::string{};
     const QString format = formatCombo_->currentText();
     if (format.startsWith(QStringLiteral("Paysage"))) { plan.options.width = 1920; plan.options.height = 1080; }
     else if (format.startsWith(QStringLiteral("Carré"))) { plan.options.width = 1080; plan.options.height = 1080; }

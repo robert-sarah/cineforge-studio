@@ -42,7 +42,23 @@ Pour activer l'IA, exécutez le script d'installation inclus :
 ./tools/download_models.sh agent-llama3-8b
 ```
 
-Les modèles seront téléchargés dans le dossier `models/` et automatiquement détectés par le logiciel.
+Les modèles seront téléchargés dans le dossier `models/` et automatiquement détectés par le logiciel. Les poids volumineux restent exclus du dépôt Git public et doivent respecter leurs licences respectives.
+
+## Analyse intelligente des médias
+
+Pour générer le catalogue local utilisé par l’agent, lancez :
+
+```bash
+python3 tools/analyze_media.py /chemin/vers/mes_medias --vision
+python3 tools/generate_timeline.py /chemin/vers/mes_medias catalog.json --style high-energy
+python3 tools/make_proxies.py /chemin/vers/mes_medias
+```
+
+Le mode `--vision` utilise OpenCV lorsqu’il est installé pour calculer un indice de netteté, compter les visages visibles dans des images ou échantillons vidéo et estimer les changements de scène. Sans OpenCV, l’analyse reste fonctionnelle avec les métadonnées `ffprobe`.
+
+## Audio et accélération matérielle
+
+CineForge détecte les fichiers audio déposés dans le dossier, normalise le niveau sonore et peut réduire automatiquement la musique sous une voix off. Le champ d’encodeur du projet accepte `libx264`, `h264_nvenc`, `h264_vaapi` et `h264_videotoolbox` lorsque le matériel et la version FFmpeg les prennent en charge. Un encodeur indisponible doit être remplacé par `libx264`.
 
 ## Lancer les tests
 

@@ -55,6 +55,11 @@ struct RenderOptions {
     int fps = 30;
     int crf = 20;
     std::string preset = "medium";
+    std::string videoEncoder = "libx264";
+    bool useProxyPreview = false;
+    int proxyWidth = 960;
+    bool loudnessNormalization = true;
+    bool duckMusicUnderVoice = true;
     bool addZoomToImages = true;
     bool burnSubtitles = true;
     bool removeSilences = false;

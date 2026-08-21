@@ -122,8 +122,12 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
             command += "-i " + quote(item.path) + " -vf \"scale=" + size +
                        ":force_original_aspect_ratio=increase,crop=" + size + ",setsar=1\" ";
         }
-        command += "-r " + std::to_string(o.fps) + " -an -c:v libx264 -pix_fmt yuv420p -preset " +
-                   o.preset + " -crf " + std::to_string(o.crf) + " " + quote(segment);
+        const bool hardware = o.videoEncoder == "h264_nvenc" || o.videoEncoder == "h264_vaapi" || o.videoEncoder == "h264_videotoolbox";
+        command += "-r " + std::to_string(o.fps) + " -an -c:v " + (o.videoEncoder.empty() ? "libx264" : o.videoEncoder) +
+                   " -pix_fmt yuv420p ";
+        if (hardware) command += "-preset p4 -cq " + std::to_string(std::min(35, o.crf + 3));
+        else command += "-preset " + o.preset + " -crf " + std::to_string(o.crf);
+        command += " " + quote(segment);
         if (progress) progress(static_cast<double>(index) / visualCount * 0.55,
                                "Préparation du plan " + std::to_string(index) + "/" + std::to_string(visualCount));
         if (!run(command, error)) return false;
@@ -157,23 +161,36 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
         finalFilter = " -vf \"subtitles='" + filterPath(o.subtitlesFile) + "':force_style='" + style + "'\"";
     }
 
-    std::filesystem::path audioSource = o.voiceOverFile;
-    if (audioSource.empty() || !std::filesystem::exists(audioSource)) audioSource = o.musicFile;
-    if (audioSource.empty() || !std::filesystem::exists(audioSource)) {
+    std::filesystem::path voice = o.voiceOverFile;
+    std::filesystem::path music = o.musicFile;
+    if ((voice.empty() || !std::filesystem::exists(voice)) && (music.empty() || !std::filesystem::exists(music))) {
         for (const auto& item : plan.media) {
             if (item.type == MediaType::Audio && std::filesystem::exists(item.path)) {
-                audioSource = item.path;
+                music = item.path;
                 break;
             }
         }
     }
+    const bool hasVoice = !voice.empty() && std::filesystem::exists(voice);
+    const bool hasMusic = !music.empty() && std::filesystem::exists(music);
     std::string finish = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error -i " + quote(silentVideo);
-    if (!audioSource.empty() && std::filesystem::exists(audioSource)) {
-        finish += " -i " + quote(audioSource) + " -map 0:v:0 -map 1:a:0 -c:a aac -shortest";
+    if (hasVoice && hasMusic && o.duckMusicUnderVoice) {
+        finish += " -i " + quote(voice) + " -i " + quote(music) + " -map 0:v:0 -filter_complex \"[1:a]";
+        if (o.loudnessNormalization) finish += "loudnorm=I=-16:TP=-1.5:LRA=11";
+        finish += "[voice];[2:a]volume=0.18[music];[music][voice]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[ducked];[voice][ducked]amix=inputs=2:duration=longest:normalize=0[aout]\" -map \"[aout]\" -c:a aac -shortest";
+    } else if (hasVoice || hasMusic) {
+        const auto& audio = hasVoice ? voice : music;
+        finish += " -i " + quote(audio) + " -map 0:v:0 -map 1:a:0";
+        if (o.loudnessNormalization) finish += " -af loudnorm=I=-16:TP=-1.5:LRA=11";
+        finish += " -c:a aac -shortest";
     } else {
         finish += " -an";
     }
-    finish += finalFilter + " -c:v libx264 -pix_fmt yuv420p -movflags +faststart " + quote(plan.outputFile);
+    const bool hardware = o.videoEncoder == "h264_nvenc" || o.videoEncoder == "h264_vaapi" || o.videoEncoder == "h264_videotoolbox";
+    finish += finalFilter + " -c:v " + (o.videoEncoder.empty() ? "libx264" : o.videoEncoder) + " -pix_fmt yuv420p ";
+    if (hardware) finish += "-preset p4 -cq " + std::to_string(std::min(35, o.crf + 3));
+    else finish += "-preset " + o.preset + " -crf " + std::to_string(o.crf);
+    finish += " -movflags +faststart " + quote(plan.outputFile);
     if (progress) progress(0.70, "Assemblage final et sous-titres");
     const bool success = run(finish, error);
     if (success && progress) progress(1.0, "Export terminé : " + plan.outputFile.string());
