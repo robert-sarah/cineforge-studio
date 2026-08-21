@@ -1,0 +1,36 @@
+name: CineForge CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  linux-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ ffmpeg
+      - name: Configure CLI
+        run: cmake --preset portable-cli
+      - name: Build CLI
+        run: cmake --build --preset portable-cli --parallel
+      - name: Check Python tools
+        run: python3 -m py_compile tools/*.py
+      - name: Validate repository project files
+        run: python3 tools/check_capabilities.py --output /tmp/cineforge-capabilities.json
+
+  linux-gui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install GUI dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ qt6-base-dev qt6-multimedia-dev ffmpeg
+      - name: Configure GUI
+        run: cmake -S . -B build/gui -DCMAKE_BUILD_TYPE=Release -DCINEFORGE_BUILD_GUI=ON
+      - name: Build GUI
+        run: cmake --build build/gui --parallel
