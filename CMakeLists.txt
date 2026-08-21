@@ -48,3 +48,15 @@ install(TARGETS cineforge-cli RUNTIME DESTINATION bin)
 if (TARGET cineforge-studio)
     install(TARGETS cineforge-studio RUNTIME DESTINATION bin)
 endif()
+
+# Les outils et la documentation sont installés sans embarquer les poids IA,
+# qui restent optionnels et soumis à leurs licences respectives.
+install(DIRECTORY tools/ DESTINATION share/cineforge/tools
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE)
+install(DIRECTORY models/ DESTINATION share/cineforge/models
+        PATTERN "*.bin" EXCLUDE
+        PATTERN "*.onnx" EXCLUDE
+        PATTERN "*.gguf" EXCLUDE)
+install(FILES README.md INSTALL.md ROADMAP.md DESTINATION share/cineforge)
+install(DIRECTORY doc/ DESTINATION share/cineforge/doc)

@@ -1,0 +1,50 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-release",
+      "displayName": "CineForge Linux Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CINEFORGE_BUILD_GUI": "ON"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "CineForge Windows Release",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/windows-release",
+      "cacheVariables": {
+        "CINEFORGE_BUILD_GUI": "ON"
+      }
+    },
+    {
+      "name": "portable-cli",
+      "displayName": "CineForge Portable CLI",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/portable-cli",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CINEFORGE_BUILD_GUI": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release"
+    },
+    {
+      "name": "portable-cli",
+      "configurePreset": "portable-cli"
+    }
+  ]
+}
