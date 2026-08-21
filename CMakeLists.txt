@@ -26,7 +26,7 @@ add_executable(cineforge-cli src/main.cpp)
 target_link_libraries(cineforge-cli PRIVATE cineforge_core)
 
 if (CINEFORGE_BUILD_GUI)
-    find_package(Qt6 COMPONENTS Widgets QUIET)
+    find_package(Qt6 COMPONENTS Widgets Multimedia MultimediaWidgets QUIET)
     if (Qt6_FOUND)
         set(CMAKE_AUTOMOC ON)
         set(CMAKE_AUTOUIC ON)
@@ -36,7 +36,7 @@ if (CINEFORGE_BUILD_GUI)
             src/gui/TimelineWidget.cpp
             src/gui/main_gui.cpp
         )
-        target_link_libraries(cineforge-studio PRIVATE cineforge_core Qt6::Widgets)
+        target_link_libraries(cineforge-studio PRIVATE cineforge_core Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets)
         target_include_directories(cineforge-studio PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
         target_compile_definitions(cineforge-studio PRIVATE OVA_HAS_QT=1)
     else()

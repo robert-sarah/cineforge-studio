@@ -16,6 +16,10 @@ class QPushButton;
 class QComboBox;
 class QCheckBox;
 class QSpinBox;
+class QMediaPlayer;
+class QAudioOutput;
+class QVideoWidget;
+class QStackedLayout;
 
 namespace ova {
 
@@ -32,9 +36,12 @@ private:
     QWidget* makePreview();
     QWidget* makeTimelinePanel();
     void chooseFolder();
+    void saveProject();
+    void openProject();
     void importFolder(const std::filesystem::path& folder);
     void applyTemplate(const QString& name, const QString& instruction);
     void startRender();
+    void loadPreviewFile(const std::filesystem::path& file);
     void appendLog(const QString& text);
     void refreshMediaList();
     void rescanCurrentFolder();
@@ -56,11 +63,16 @@ private:
     QPushButton* renderButton_ = nullptr;
     QLabel* previewLabel_ = nullptr;
     QLabel* mediaCountLabel_ = nullptr;
+    QMediaPlayer* player_ = nullptr;
+    QAudioOutput* audioOutput_ = nullptr;
+    QVideoWidget* videoWidget_ = nullptr;
+    QStackedLayout* previewStack_ = nullptr;
     QComboBox* formatCombo_ = nullptr;
     QComboBox* fpsCombo_ = nullptr;
     QComboBox* sortCombo_ = nullptr;
     QCheckBox* zoomCheck_ = nullptr;
     QCheckBox* subtitlesCheck_ = nullptr;
+    QLineEdit* agentModelEdit_ = nullptr;
     QSpinBox* crfSpin_ = nullptr;
     TimelineWidget* timeline_ = nullptr;
 };

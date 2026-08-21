@@ -99,7 +99,14 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
     const auto& o = plan.options;
     const std::string size = std::to_string(o.width) + ":" + std::to_string(o.height);
     std::size_t index = 0;
+    std::size_t visualCount = 0;
+    for (const auto& item : plan.media) if (item.type != MediaType::Audio) ++visualCount;
+    if (visualCount == 0) {
+        if (error) *error = "Le dossier ne contient aucun média vidéo ou image exploitable.";
+        return false;
+    }
     for (const auto& item : plan.media) {
+        if (item.type == MediaType::Audio) continue;
         const auto segment = work / ("segment_" + std::to_string(index++) + ".mp4");
         std::string command = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error ";
         if (item.type == MediaType::Image) {
@@ -117,8 +124,8 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
         }
         command += "-r " + std::to_string(o.fps) + " -an -c:v libx264 -pix_fmt yuv420p -preset " +
                    o.preset + " -crf " + std::to_string(o.crf) + " " + quote(segment);
-        if (progress) progress(static_cast<double>(index - 1) / plan.media.size() * 0.55,
-                               "Préparation du plan " + std::to_string(index) + "/" + std::to_string(plan.media.size()));
+        if (progress) progress(static_cast<double>(index) / visualCount * 0.55,
+                               "Préparation du plan " + std::to_string(index) + "/" + std::to_string(visualCount));
         if (!run(command, error)) return false;
         concat << "file " << quote(segment) << "\n";
     }
@@ -136,16 +143,35 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
             style = "FontName=Impact,FontSize=32,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=4,Shadow=2,Alignment=2,MarginV=250";
         } else if (plan.style == "cinematic") {
             style = "FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Alignment=2,MarginV=40";
+        } else if (plan.style == "documentary") {
+            style = "FontName=Georgia,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101010,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=70";
+        } else if (plan.style == "vlog") {
+            style = "FontName=Arial,FontSize=27,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=2,Alignment=2,MarginV=110";
+        } else if (plan.style == "gaming") {
+            style = "FontName=Arial,FontSize=30,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=4,Shadow=2,Alignment=2,MarginV=180";
+        } else if (plan.style == "podcast") {
+            style = "FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00303030,BorderStyle=1,Outline=2,Alignment=2,MarginV=55";
+        } else if (plan.style == "tutorial") {
+            style = "FontName=Arial,FontSize=23,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=85";
         }
         finalFilter = " -vf \"subtitles='" + filterPath(o.subtitlesFile) + "':force_style='" + style + "'\"";
     }
 
-    std::string finish = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error -i " + quote(silentVideo);
-    if (!o.voiceOverFile.empty() && std::filesystem::exists(o.voiceOverFile)) {
-        finish += " -i " + quote(o.voiceOverFile) + " -map 0:v:0 -map 1:a:0 -c:a aac -shortest";
+    std::filesystem::path audioSource = o.voiceOverFile;
+    if (audioSource.empty() || !std::filesystem::exists(audioSource)) audioSource = o.musicFile;
+    if (audioSource.empty() || !std::filesystem::exists(audioSource)) {
+        for (const auto& item : plan.media) {
+            if (item.type == MediaType::Audio && std::filesystem::exists(item.path)) {
+                audioSource = item.path;
+                break;
+            }
+        }
     }
-    if (!o.musicFile.empty() && std::filesystem::exists(o.musicFile)) {
-        finish += " -i " + quote(o.musicFile);
+    std::string finish = quote(ffmpegExecutable_) + " -y -hide_banner -loglevel error -i " + quote(silentVideo);
+    if (!audioSource.empty() && std::filesystem::exists(audioSource)) {
+        finish += " -i " + quote(audioSource) + " -map 0:v:0 -map 1:a:0 -c:a aac -shortest";
+    } else {
+        finish += " -an";
     }
     finish += finalFilter + " -c:v libx264 -pix_fmt yuv420p -movflags +faststart " + quote(plan.outputFile);
     if (progress) progress(0.70, "Assemblage final et sous-titres");

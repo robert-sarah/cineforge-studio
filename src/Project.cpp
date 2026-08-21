@@ -76,7 +76,7 @@ void Project::scanMedia(bool recursive) {
             if (error) break;
             if (!entry.is_regular_file(error)) continue;
             const auto type = detectType(entry.path());
-            if (type == MediaType::Unknown || type == MediaType::Audio) continue;
+            if (type == MediaType::Unknown) continue;
             media_.push_back(MediaItem{entry.path(), type, 0.0});
         }
     } else {
@@ -84,7 +84,7 @@ void Project::scanMedia(bool recursive) {
             if (error) break;
             if (!entry.is_regular_file(error)) continue;
             const auto type = detectType(entry.path());
-            if (type == MediaType::Unknown || type == MediaType::Audio) continue;
+            if (type == MediaType::Unknown) continue;
             media_.push_back(MediaItem{entry.path(), type, 0.0});
         }
     }
@@ -120,6 +120,26 @@ RenderPlan Project::makePlan() const {
     plan.outputFile = outputFile_;
     plan.media = media_;
     plan.options = options_;
+
+    TimelineTrack videoTrack{"V1  •  VIDEO", false, {}};
+    TimelineTrack audioTrack{"A1  •  AUDIO", true, {}};
+    double videoCursor = 0.0;
+    for (std::size_t index = 0; index < media_.size(); ++index) {
+        const auto& item = media_[index];
+        if (item.type == MediaType::Audio) {
+            audioTrack.clips.push_back(TimelineClip{index, 1, 0.0, item.durationSeconds > 0.0 ? item.durationSeconds : 0.0, 0.0, item.durationSeconds});
+            continue;
+        }
+        const double duration = item.durationSeconds > 0.0 ? item.durationSeconds : (item.type == MediaType::Image ? 3.0 : 5.0);
+        TimelineClip clip{index, 0, videoCursor, duration, 0.0, duration};
+        if (item.type == MediaType::Image) {
+            clip.scaleKeyframes = {{0.0, 1.0}, {duration, 1.12}};
+        }
+        videoTrack.clips.push_back(clip);
+        videoCursor += duration;
+    }
+    if (!videoTrack.clips.empty()) plan.tracks.push_back(videoTrack);
+    if (!audioTrack.clips.empty()) plan.tracks.push_back(audioTrack);
     return plan;
 }
 

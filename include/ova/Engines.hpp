@@ -26,6 +26,10 @@ class LocalAgent {
 public:
     RenderPlan interpret(const std::string& instruction,
                          const std::filesystem::path& defaultDirectory = {}) const;
+                         
+    RenderPlan interpretWithGguf(const std::string& instruction,
+                                 const std::filesystem::path& modelPath,
+                                 const std::filesystem::path& defaultDirectory = {}) const;
 
     std::string explainPlan(const RenderPlan& plan) const;
 

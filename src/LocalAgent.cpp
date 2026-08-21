@@ -2,10 +2,34 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <regex>
 #include <sstream>
 
 namespace ova {
+namespace {
+
+std::string shellQuote(const std::string& value) {
+    std::string result = "'";
+    for (const char c : value) {
+        if (c == '\'') result += "'\\''";
+        else result += c;
+    }
+    result += "'";
+    return result;
+}
+
+std::string readText(const std::filesystem::path& path) {
+    std::ifstream file(path);
+    std::ostringstream text;
+    text << file.rdbuf();
+    return text.str();
+}
+
+} // namespace
 
 std::string LocalAgent::lower(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -49,9 +73,35 @@ RenderPlan LocalAgent::interpret(const std::string& instruction,
         plan.style = "high-energy";
         plan.options.addZoomToImages = true;
         plan.options.removeSilences = true;
-    } else if (text.find("cinématique") != std::string::npos || text.find("cinematic") != std::string::npos) {
+    } else if (text.find("cinématique") != std::string::npos || text.find("cinematic") != std::string::npos ||
+               text.find("film") != std::string::npos) {
         plan.style = "cinematic";
+        plan.options.width = 1920;
+        plan.options.height = 1080;
         plan.options.addZoomToImages = true;
+    } else if (text.find("documentaire") != std::string::npos || text.find("documentary") != std::string::npos) {
+        plan.style = "documentary";
+        plan.options.width = 1920;
+        plan.options.height = 1080;
+        plan.options.addZoomToImages = false;
+    } else if (text.find("vlog") != std::string::npos || text.find("voyage") != std::string::npos) {
+        plan.style = "vlog";
+        plan.options.addZoomToImages = true;
+    } else if (text.find("gaming") != std::string::npos || text.find("jeu vidéo") != std::string::npos ||
+               text.find("stream") != std::string::npos) {
+        plan.style = "gaming";
+        plan.options.addZoomToImages = false;
+    } else if (text.find("podcast") != std::string::npos || text.find("interview") != std::string::npos) {
+        plan.style = "podcast";
+        plan.options.width = 1920;
+        plan.options.height = 1080;
+        plan.options.addZoomToImages = false;
+    } else if (text.find("formation") != std::string::npos || text.find("cours") != std::string::npos ||
+               text.find("tutoriel") != std::string::npos || text.find("tutorial") != std::string::npos) {
+        plan.style = "tutorial";
+        plan.options.width = 1920;
+        plan.options.height = 1080;
+        plan.options.addZoomToImages = false;
     }
 
     if (text.find("sans sous-titre") != std::string::npos || text.find("sans subtitle") != std::string::npos) {
@@ -78,6 +128,48 @@ RenderPlan LocalAgent::interpret(const std::string& instruction,
     if (std::regex_search(instruction, voiceMatch, voiceRegex) && voiceMatch.size() > 1) {
         plan.options.voiceOverFile = voiceMatch[1].str();
     }
+    return plan;
+}
+
+RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
+                                         const std::filesystem::path& modelPath,
+                                         const std::filesystem::path& defaultDirectory) const {
+    RenderPlan fallback = interpret(instruction, defaultDirectory);
+    if (modelPath.empty() || !std::filesystem::is_regular_file(modelPath)) return fallback;
+
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto work = std::filesystem::temp_directory_path() / ("cineforge_agent_" + std::to_string(stamp));
+    std::error_code ignored;
+    std::filesystem::create_directories(work, ignored);
+    const auto promptFile = work / "prompt.txt";
+    const auto resultFile = work / "result.txt";
+    const std::string prompt =
+        "Tu es l'agent local de CineForge Studio. Analyse la demande de montage et reponds uniquement avec un JSON compact. "
+        "Schema: {\\\"style\\\":\\\"high-energy|cinematic|documentary|vlog|gaming|podcast|tutorial|standard\\\","
+        "\\\"width\\\":1080 ou 1920,\\\"height\\\":1080 ou 1920,\\\"zoom\\\":true ou false,"
+        "\\\"subtitles\\\":true ou false,\\\"remove_silences\\\":true ou false}. Demande: " + instruction;
+    {
+        std::ofstream file(promptFile);
+        file << prompt;
+    }
+
+    const std::string command = "llama-cli -m " + shellQuote(modelPath.string()) +
+        " -f " + shellQuote(promptFile.string()) + " -n 256 --temp 0.1 > " + shellQuote(resultFile.string()) + " 2>/dev/null";
+    if (std::system(command.c_str()) != 0 || !std::filesystem::exists(resultFile)) {
+        std::filesystem::remove_all(work, ignored);
+        return fallback;
+    }
+
+    const std::string output = readText(resultFile);
+    std::smatch match;
+    RenderPlan plan = fallback;
+    if (std::regex_search(output, match, std::regex(R"(\"style\"\s*:\s*\"([^\"]+)\")")) && match.size() > 1) plan.style = match[1].str();
+    if (std::regex_search(output, match, std::regex(R"(\"width\"\s*:\s*(\d+))")) && match.size() > 1) plan.options.width = std::stoi(match[1].str());
+    if (std::regex_search(output, match, std::regex(R"(\"height\"\s*:\s*(\d+))")) && match.size() > 1) plan.options.height = std::stoi(match[1].str());
+    if (std::regex_search(output, match, std::regex(R"(\"zoom\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.addZoomToImages = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"subtitles\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.burnSubtitles = match[1].str() == "true";
+    if (std::regex_search(output, match, std::regex(R"(\"remove_silences\"\s*:\s*(true|false))")) && match.size() > 1) plan.options.removeSilences = match[1].str() == "true";
+    std::filesystem::remove_all(work, ignored);
     return plan;
 }
 

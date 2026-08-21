@@ -2,22 +2,28 @@
 
 #include <QMouseEvent>
 #include <QPainter>
-#include <QPen>
+#include <QWheelEvent>
 
 #include <algorithm>
+#include <cmath>
 
 namespace ova {
+namespace {
+constexpr int kHeaderHeight = 30;
+constexpr int kLabelWidth = 112;
+constexpr int kTrackHeight = 52;
+constexpr double kGridStep = 1.0;
+}
 
 TimelineWidget::TimelineWidget(QWidget* parent) : QWidget(parent) {
-    setMinimumHeight(245);
+    setMinimumHeight(kHeaderHeight + kTrackHeight * 3 + 18);
     setMouseTracking(true);
-    setAutoFillBackground(false);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void TimelineWidget::setMedia(const std::vector<MediaItem>& media) {
     media_ = media;
-    const int width = std::max(900, static_cast<int>(media_.size() * 330 + 190));
-    setMinimumWidth(width);
+    rebuildDefaultTimeline();
     update();
 }
 
@@ -31,87 +37,192 @@ void TimelineWidget::setCurrentTime(double seconds) {
     update();
 }
 
-double TimelineWidget::timeAtX(int x) const {
-    return std::max(0.0, (x - 150.0) / pixelsPerSecond_);
-}
-
-void TimelineWidget::mousePressEvent(QMouseEvent* event) {
-    currentTime_ = timeAtX(event->position().x());
+void TimelineWidget::setTracks(const std::vector<TimelineTrack>& tracks) {
+    tracks_ = tracks;
+    if (tracks_.empty()) rebuildDefaultTimeline();
+    selectedClip_ = tracks_.empty() || tracks_[0].clips.empty() ? -1 : 0;
+    currentTime_ = 0.0;
     update();
-    QWidget::mousePressEvent(event);
 }
 
-void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton) {
-        currentTime_ = timeAtX(event->position().x());
-        update();
+void TimelineWidget::rebuildDefaultTimeline() {
+    tracks_.clear();
+    tracks_.push_back(TimelineTrack{"V1  •  VIDEO", false, {}});
+    tracks_.push_back(TimelineTrack{"V2  •  TEXTE / OVERLAYS", false, {}});
+    tracks_.push_back(TimelineTrack{"A1  •  AUDIO", true, {}});
+    double cursor = 0.0;
+    for (std::size_t i = 0; i < media_.size(); ++i) {
+        const auto& media = media_[i];
+        const double duration = media.durationSeconds > 0.0
+            ? media.durationSeconds
+            : (media.type == MediaType::Image ? 3.0 : 5.0);
+        tracks_[0].clips.push_back(TimelineClip{i, 0, cursor, duration, 0.0, duration});
+        cursor += duration;
     }
-    QWidget::mouseMoveEvent(event);
+    selectedClip_ = tracks_[0].clips.empty() ? -1 : 0;
+    currentTime_ = 0.0;
+}
+
+double TimelineWidget::timeAtX(int x) const {
+    return std::max(0.0, (x - kLabelWidth) / pixelsPerSecond_);
+}
+
+int TimelineWidget::xAtTime(double seconds) const {
+    return kLabelWidth + static_cast<int>(std::lround(seconds * pixelsPerSecond_));
+}
+
+double TimelineWidget::snapTime(double seconds) const {
+    if (!snapEnabled_) return std::max(0.0, seconds);
+    return std::max(0.0, std::round(seconds / kGridStep) * kGridStep);
+}
+
+int TimelineWidget::clipAt(const QPoint& point) const {
+    if (point.y() < kHeaderHeight) return -1;
+    const int trackIndex = (point.y() - kHeaderHeight) / kTrackHeight;
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(tracks_.size())) return -1;
+    const auto& clips = tracks_[trackIndex].clips;
+    const double time = timeAtX(point.x());
+    for (int i = 0; i < static_cast<int>(clips.size()); ++i) {
+        const auto& clip = clips[i];
+        if (time >= clip.startSeconds && time <= clip.startSeconds + clip.durationSeconds) return i;
+    }
+    return -1;
 }
 
 void TimelineWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(rect(), QColor("#181a20"));
+    painter.fillRect(rect(), QColor("#14161c"));
 
-    const int left = 150;
-    const int rulerHeight = 32;
-    const QColor grid("#30333d");
-    const QColor muted("#8e94a3");
-    const QColor text("#e6e8ef");
+    const int contentWidth = width() - kLabelWidth;
+    painter.fillRect(0, 0, width(), kHeaderHeight, QColor("#222630"));
+    painter.fillRect(0, kHeaderHeight, kLabelWidth, height(), QColor("#1b1e26"));
+    painter.setPen(QColor("#333844"));
+    painter.drawLine(kLabelWidth, 0, kLabelWidth, height());
 
-    painter.fillRect(0, 0, width(), rulerHeight, QColor("#20232b"));
-    painter.fillRect(0, rulerHeight, left, height() - rulerHeight, QColor("#20232b"));
-    painter.setPen(QPen(grid, 1));
-    for (int second = 0; second < 120; ++second) {
-        const int x = left + static_cast<int>(second * pixelsPerSecond_);
-        if (x > width()) break;
-        painter.drawLine(x, rulerHeight, x, height());
-        painter.setPen(muted);
-        painter.drawText(x + 5, 20, QStringLiteral("%1:%2")
-            .arg(second / 60, 2, 10, QChar('0'))
-            .arg(second % 60, 2, 10, QChar('0')));
-        painter.setPen(QPen(grid, 1));
+    painter.setFont(QFont(QStringLiteral("Inter"), 9));
+    const double visibleSeconds = std::max(1.0, contentWidth / pixelsPerSecond_);
+    for (double t = 0.0; t <= visibleSeconds + 1.0; t += kGridStep) {
+        const int x = xAtTime(t);
+        painter.setPen(QColor("#383d49"));
+        painter.drawLine(x, kHeaderHeight, x, height());
+        painter.setPen(QColor("#a5adbd"));
+        painter.drawText(x + 4, 19, QStringLiteral("%1s").arg(static_cast<int>(t)));
     }
 
-    const QStringList trackNames = {QStringLiteral("VIDEO 01"), QStringLiteral("OVERLAYS"), QStringLiteral("AUDIO / VOICE"), QStringLiteral("SUBTITLES")};
-    for (int row = 0; row < trackNames.size(); ++row) {
-        const int y = rulerHeight + row * 49;
-        painter.setPen(QPen(grid, 1));
-        painter.drawLine(0, y, width(), y);
-        painter.setPen(muted);
-        painter.drawText(20, y + 29, trackNames.at(row));
+    for (int track = 0; track < static_cast<int>(tracks_.size()); ++track) {
+        const int y = kHeaderHeight + track * kTrackHeight;
+        painter.fillRect(0, y, kLabelWidth, kTrackHeight, track % 2 ? QColor("#20232b") : QColor("#1d2027"));
+        painter.setPen(QColor("#c1c7d4"));
+        painter.drawText(12, y + 30, QString::fromStdString(tracks_[track].name));
+        painter.setPen(QColor("#2e333e"));
+        painter.drawLine(0, y + kTrackHeight - 1, width(), y + kTrackHeight - 1);
+
+        const auto& clips = tracks_[track].clips;
+        for (int index = 0; index < static_cast<int>(clips.size()); ++index) {
+            const auto& clip = clips[index];
+            const int x = xAtTime(clip.startSeconds);
+            const int w = std::max(18, xAtTime(clip.startSeconds + clip.durationSeconds) - x);
+            const bool selected = track == 0 && index == selectedClip_;
+            const QColor base = selected ? QColor("#5b55df") : (track == 0 ? QColor("#304a72") : QColor("#3d5e4d"));
+            painter.setPen(selected ? QColor("#aaa5ff") : QColor("#526b95"));
+            painter.setBrush(base);
+            painter.drawRoundedRect(QRect(x + 2, y + 7, w - 4, kTrackHeight - 14), 5, 5);
+            painter.setPen(QColor("#f2f4fa"));
+            const auto label = clip.mediaIndex < media_.size()
+                ? QString::fromStdString(media_[clip.mediaIndex].path.filename().string())
+                : QStringLiteral("Clip");
+            painter.drawText(QRect(x + 9, y + 20, std::max(0, w - 16), 18), Qt::TextSingleLine, label);
+            painter.setPen(QColor(255, 255, 255, 80));
+            for (int thumb = x + 7; thumb < x + w - 8; thumb += 52) painter.drawLine(thumb, y + 10, thumb, y + kTrackHeight - 10);
+        }
     }
 
-    double cursor = 0.0;
-    int clipIndex = 0;
-    for (const auto& item : media_) {
-        const double duration = item.type == MediaType::Image ? 3.0 : 5.0;
-        const int x = left + static_cast<int>(cursor * pixelsPerSecond_);
-        const int w = std::max(90, static_cast<int>(duration * pixelsPerSecond_) - 5);
-        const int y = rulerHeight + 7;
-        const QColor color = item.type == MediaType::Image ? QColor("#7057d9") : QColor("#2f9e8f");
-        painter.setBrush(color);
-        painter.setPen(QPen(color.lighter(135), 1));
-        painter.drawRoundedRect(x, y, w, 35, 5, 5);
-        painter.setPen(text);
-        const QString filename = QString::fromStdString(item.path.filename().string());
-        painter.drawText(x + 9, y + 22, painter.fontMetrics().elidedText(filename, Qt::ElideRight, w - 18));
-        painter.setPen(QColor("#ffffff80"));
-        painter.drawText(x + 9, y + 33, QStringLiteral("%1  •  %2s").arg(++clipIndex).arg(duration, 0, 'f', 1));
-        cursor += duration;
+    const int playheadX = xAtTime(currentTime_);
+    painter.setPen(QPen(QColor("#ff5d8f"), 2));
+    painter.drawLine(playheadX, 0, playheadX, height());
+    painter.setBrush(QColor("#ff5d8f"));
+    painter.drawPolygon(QPolygon{QPoint(playheadX - 6, 0), QPoint(playheadX + 6, 0), QPoint(playheadX, 8)});
+    painter.setPen(QColor("#ff9fbd"));
+    painter.drawText(playheadX + 7, 19, QStringLiteral("%1s").arg(QString::number(currentTime_, 'f', 1)));
+}
+
+void TimelineWidget::mousePressEvent(QMouseEvent* event) {
+    if (event->button() != Qt::LeftButton) return;
+    if (event->pos().y() < kHeaderHeight) {
+        currentTime_ = timeAtX(event->pos().x());
+        update();
+        return;
     }
+    const int index = clipAt(event->pos());
+    if (index >= 0) {
+        selectedClip_ = index;
+        const auto& clip = tracks_[0].clips[index];
+        dragOffset_ = timeAtX(event->pos().x()) - clip.startSeconds;
+        dragging_ = true;
+        currentTime_ = timeAtX(event->pos().x());
+    } else {
+        currentTime_ = timeAtX(event->pos().x());
+        selectedClip_ = -1;
+    }
+    update();
+}
 
-    painter.setBrush(QColor("#f04969"));
-    painter.setPen(Qt::NoPen);
-    const int playheadX = left + static_cast<int>(currentTime_ * pixelsPerSecond_);
-    painter.drawRect(playheadX - 1, 0, 3, height());
-    QPolygon triangle;
-    triangle << QPoint(playheadX - 7, 0) << QPoint(playheadX + 7, 0) << QPoint(playheadX, 10);
-    painter.drawPolygon(triangle);
+void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
+    if (!dragging_ || selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
+    auto& clip = tracks_[0].clips[selectedClip_];
+    clip.startSeconds = snapTime(timeAtX(event->pos().x()) - dragOffset_);
+    currentTime_ = clip.startSeconds + dragOffset_;
+    update();
+}
 
-    painter.setPen(QColor("#aeb4c2"));
-    painter.drawText(left + 15, height() - 12, QStringLiteral("Style actif : %1").arg(styleName_));
+void TimelineWidget::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) dragging_ = false;
+}
+
+void TimelineWidget::mouseDoubleClickEvent(QMouseEvent* event) {
+    const int index = clipAt(event->pos());
+    if (index >= 0) {
+        selectedClip_ = index;
+        currentTime_ = timeAtX(event->pos().x());
+        cutSelectedAtPlayhead();
+    }
+}
+
+void TimelineWidget::wheelEvent(QWheelEvent* event) {
+    if (event->modifiers() & Qt::ControlModifier) {
+        pixelsPerSecond_ *= event->angleDelta().y() > 0 ? 1.15 : 0.87;
+        pixelsPerSecond_ = std::clamp(pixelsPerSecond_, 35.0, 420.0);
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::wheelEvent(event);
+}
+
+void TimelineWidget::cutSelectedAtPlayhead() {
+    if (selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
+    auto& clips = tracks_[0].clips;
+    auto clip = clips[selectedClip_];
+    const double relative = currentTime_ - clip.startSeconds;
+    if (relative <= 0.15 || relative >= clip.durationSeconds - 0.15) return;
+    TimelineClip right = clip;
+    right.startSeconds = currentTime_;
+    right.durationSeconds = clip.durationSeconds - relative;
+    right.sourceInSeconds = clip.sourceInSeconds + relative;
+    clip.durationSeconds = relative;
+    clip.sourceOutSeconds = clip.sourceInSeconds + relative;
+    clips[selectedClip_] = clip;
+    clips.insert(clips.begin() + selectedClip_ + 1, right);
+    ++selectedClip_;
+    update();
+}
+
+void TimelineWidget::deleteSelectedClip() {
+    if (selectedClip_ < 0 || selectedClip_ >= static_cast<int>(tracks_[0].clips.size())) return;
+    tracks_[0].clips.erase(tracks_[0].clips.begin() + selectedClip_);
+    selectedClip_ = std::min(selectedClip_, static_cast<int>(tracks_[0].clips.size()) - 1);
+    update();
 }
 
 } // namespace ova

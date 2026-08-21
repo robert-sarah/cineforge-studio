@@ -25,6 +25,30 @@ struct SubtitleCue {
     std::string text;
 };
 
+struct Keyframe {
+    double timeSeconds = 0.0;
+    double value = 0.0;
+};
+
+struct TimelineClip {
+    std::size_t mediaIndex = 0;
+    int trackIndex = 0;
+    double startSeconds = 0.0;
+    double durationSeconds = 3.0;
+    double sourceInSeconds = 0.0;
+    double sourceOutSeconds = 0.0;
+    double opacity = 1.0;
+    double scale = 1.0;
+    std::vector<Keyframe> scaleKeyframes;
+    std::vector<Keyframe> opacityKeyframes;
+};
+
+struct TimelineTrack {
+    std::string name;
+    bool audio = false;
+    std::vector<TimelineClip> clips;
+};
+
 struct RenderOptions {
     int width = 1080;
     int height = 1920;
@@ -43,6 +67,7 @@ struct RenderPlan {
     std::filesystem::path inputDirectory;
     std::filesystem::path outputFile = "output.mp4";
     std::vector<MediaItem> media;
+    std::vector<TimelineTrack> tracks;
     std::vector<SubtitleCue> subtitles;
     RenderOptions options;
     std::string style = "standard";

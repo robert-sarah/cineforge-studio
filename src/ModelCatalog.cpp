@@ -21,9 +21,9 @@ std::vector<ModelInfo> ModelCatalog::builtIn() {
         {"piper-en-lessac", "Piper English — Lessac", "OHF-Voice / Piper", ModelKind::PiperVoice,
          "en_US-lessac-medium.onnx", "https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/lessac/medium",
          "Voix anglaise énergique pour les formats courts.", "~60 MB + config"},
-        {"agent-qwen2.5-3b", "Agent local — GGUF 3B", "llama.cpp / GGUF", ModelKind::Agent,
-         "agent-qwen2.5-3b-instruct.gguf", "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF",
-         "Option de cerveau local pour les plans agentiques et scripts.", "~2–3 GB"}
+        {"agent-llama3-8b", "Llama 3 (8B Instruct)", "Meta / GGUF", ModelKind::Agent,
+         "llama-3-8b-instruct.Q4_K_M.gguf", "https://huggingface.co/NousResearch/Meta-Llama-3-8B-Instruct-GGUF",
+         "Cerveau local puissant pour comprendre le langage naturel et générer des plans de montage JSON.", "~4.9 GB"}
     };
 }
 

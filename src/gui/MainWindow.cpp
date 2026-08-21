@@ -16,17 +16,25 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QGroupBox>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMainWindow>
+#include <QMediaPlayer>
+#include <QAudioOutput>
+#include <QVideoWidget>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStackedLayout>
 #include <QSpinBox>
 #include <QUrl>
 #include <QSplitter>
@@ -128,12 +136,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     exportAction->setObjectName(QStringLiteral("primaryButton"));
     connect(importAction, &QAction::triggered, this, [this] { chooseFolder(); });
     connect(exportAction, &QAction::triggered, this, [this] { startRender(); });
-    connect(saveAction, &QAction::triggered, this, [this] { appendLog(QStringLiteral("Projet sauvegardé localement (prochaine version : fichier .ova).")); });
+    connect(saveAction, &QAction::triggered, this, [this] { saveProject(); });
     connect(undoAction, &QAction::triggered, this, [this] { appendLog(QStringLiteral("Annulation : prête pour les opérations de timeline.")); });
     connect(redoAction, &QAction::triggered, this, [this] { appendLog(QStringLiteral("Rétablissement : prête pour les opérations de timeline.")); });
 
     auto* fileMenu = menuBar()->addMenu(QStringLiteral("Fichier"));
     fileMenu->addAction(importAction);
+    fileMenu->addAction(QStringLiteral("Ouvrir un projet"), this, &MainWindow::openProject);
+    fileMenu->addAction(saveAction);
     fileMenu->addAction(exportAction);
     fileMenu->addSeparator();
     fileMenu->addAction(QStringLiteral("Quitter"), this, &QWidget::close);
@@ -162,12 +172,24 @@ QWidget* MainWindow::makePreview() {
     layout->addLayout(header);
 
     auto* previewRow = new QHBoxLayout();
-    previewLabel_ = new QLabel(QStringLiteral("Aucune prévisualisation\n\nImporte un dossier média pour commencer"), container);
+    previewStack_ = new QStackedLayout();
+    previewLabel_ = new QLabel(QStringLiteral("Aucune prévisualisation\n\nImporte un dossier média ou exporte un projet pour commencer"), container);
     previewLabel_->setObjectName(QStringLiteral("previewScreen"));
     previewLabel_->setAlignment(Qt::AlignCenter);
     previewLabel_->setMinimumHeight(360);
-    previewRow->addWidget(previewLabel_, 1);
+    videoWidget_ = new QVideoWidget(container);
+    videoWidget_->setMinimumHeight(360);
+    videoWidget_->setAspectRatioMode(Qt::KeepAspectRatio);
+    previewStack_->addWidget(previewLabel_);
+    previewStack_->addWidget(videoWidget_);
+    previewRow->addLayout(previewStack_, 1);
     layout->addLayout(previewRow, 1);
+
+    player_ = new QMediaPlayer(this);
+    audioOutput_ = new QAudioOutput(this);
+    audioOutput_->setVolume(0.9);
+    player_->setAudioOutput(audioOutput_);
+    player_->setVideoOutput(videoWidget_);
 
     auto* controls = new QHBoxLayout();
     auto* rewind = new QPushButton(QStringLiteral("◀  5s"), container);
@@ -178,9 +200,22 @@ QWidget* MainWindow::makePreview() {
     controls->addWidget(play);
     controls->addWidget(forward);
     controls->addStretch();
-    connect(play, &QPushButton::clicked, this, [this, play] {
-        play->setText(play->text().startsWith(QStringLiteral("▶")) ? QStringLiteral("Ⅱ  Pause") : QStringLiteral("▶  Lecture"));
-        appendLog(QStringLiteral("Prévisualisation : le lecteur sera relié au rendu GPU dans l'étape suivante."));
+    connect(play, &QPushButton::clicked, this, [this] {
+        if (!player_ || player_->source().isEmpty()) return;
+        if (player_->playbackState() == QMediaPlayer::PlayingState) player_->pause();
+        else player_->play();
+    });
+    connect(player_, &QMediaPlayer::playbackStateChanged, this, [play](QMediaPlayer::PlaybackState state) {
+        play->setText(state == QMediaPlayer::PlayingState ? QStringLiteral("Ⅱ  Pause") : QStringLiteral("▶  Lecture"));
+    });
+    connect(rewind, &QPushButton::clicked, this, [this] {
+        if (player_) player_->setPosition(std::max<qint64>(0, player_->position() - 5000));
+    });
+    connect(forward, &QPushButton::clicked, this, [this] {
+        if (player_) player_->setPosition(player_->position() + 5000);
+    });
+    connect(player_, &QMediaPlayer::positionChanged, this, [this](qint64 position) {
+        if (timeline_) timeline_->setCurrentTime(position / 1000.0);
     });
     layout->addLayout(controls);
     return container;
@@ -214,7 +249,12 @@ QWidget* MainWindow::makeMediaDock() {
         {QStringLiteral("⚡  MrBeast / High Energy"), QStringLiteral("Crée une vidéo verticale ultra dynamique style MrBeast avec des zooms rapides, des cuts serrés, des sous-titres impactants et un rythme viral")},
         {QStringLiteral("🎬  Cinématique"), QStringLiteral("Crée un montage cinématique avec format paysage, rythme lent, zooms doux et ambiance premium")},
         {QStringLiteral("📱  Shorts / TikTok"), QStringLiteral("Crée un short vertical très rapide avec sous-titres contrastés, cuts fréquents et accroche immédiate")},
-        {QStringLiteral("🎓  Tutoriel"), QStringLiteral("Crée un tutoriel vertical clair avec sous-titres lisibles, rythme régulier et hiérarchie visuelle")}
+        {QStringLiteral("🎓  Tutoriel"), QStringLiteral("Crée un tutoriel paysage clair avec sous-titres lisibles, rythme régulier et hiérarchie visuelle")},
+        {QStringLiteral("📚  Documentaire"), QStringLiteral("Crée un documentaire paysage avec narration, rythme posé, textes élégants et sélection des plans les plus pertinents")},
+        {QStringLiteral("🌍  Vlog / Voyage"), QStringLiteral("Crée un vlog de voyage vivant avec transitions douces, zooms, musique et sous-titres lisibles")},
+        {QStringLiteral("🎮  Gaming"), QStringLiteral("Crée une vidéo gaming énergique avec cuts rapides, sous-titres contrastés et format adapté aux extraits de stream")},
+        {QStringLiteral("🎙  Podcast / Interview"), QStringLiteral("Crée une vidéo de podcast paysage avec rythme régulier, voix claire, sous-titres et mise en avant des moments forts")},
+        {QStringLiteral("📣  Publicité produit"), QStringLiteral("Crée une publicité produit courte et premium avec accroche immédiate, présentation claire et appel à l’action")}
     };
     for (const auto& item : templates) {
         auto* button = new QPushButton(item.first, templatesPage);
@@ -270,6 +310,7 @@ QWidget* MainWindow::makeMediaDock() {
             const auto path = ModelCatalog::modelPath(model, ModelCatalog::defaultDirectory(currentFolder_));
             if (model.kind == ModelKind::Whisper && whisperModelEdit_) whisperModelEdit_->setText(QString::fromStdString(path.string()));
             if (model.kind == ModelKind::PiperVoice && piperModelEdit_) piperModelEdit_->setText(QString::fromStdString(path.string()));
+            if (model.kind == ModelKind::Agent && agentModelEdit_) agentModelEdit_->setText(QString::fromStdString(path.string()));
             appendLog(QStringLiteral("Modèle sélectionné : %1").arg(QString::fromStdString(path.string())));
             break;
         }
@@ -351,6 +392,9 @@ QWidget* MainWindow::makeAgentDock() {
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(10, 10, 10, 10);
     layout->addWidget(caption(QStringLiteral("DONNE UNE INSTRUCTION À L’AGENT"), panel));
+    agentModelEdit_ = new QLineEdit(panel);
+    agentModelEdit_->setPlaceholderText(QStringLiteral("Modèle GGUF (optionnel)"));
+    layout->addWidget(agentModelEdit_);
     commandEdit_ = new QLineEdit(panel);
     commandEdit_->setPlaceholderText(QStringLiteral("Ex. : transforme ce dossier en short viral très rythmé"));
     layout->addWidget(commandEdit_);
@@ -385,6 +429,111 @@ QWidget* MainWindow::makeTimelinePanel() {
     return panel;
 }
 
+void MainWindow::saveProject() {
+    QString target;
+    if (!currentFolder_.empty()) target = QString::fromStdString((currentFolder_ / "project.cineforge").string());
+    target = QFileDialog::getSaveFileName(this, QStringLiteral("Sauvegarder le projet CineForge"), target, QStringLiteral("Projet CineForge (*.cineforge)"));
+    if (target.isEmpty()) return;
+
+    QJsonObject root;
+    root[QStringLiteral("formatVersion")] = 1;
+    root[QStringLiteral("inputDirectory")] = QString::fromStdString(currentFolder_.string());
+    root[QStringLiteral("outputFile")] = outputEdit_ ? outputEdit_->text() : QStringLiteral("output.mp4");
+    root[QStringLiteral("style")] = commandEdit_ ? commandEdit_->text() : QStringLiteral("standard");
+
+    QJsonArray media;
+    for (const auto& item : currentMedia_) {
+        QJsonObject entry;
+        entry[QStringLiteral("path")] = QString::fromStdString(item.path.string());
+        entry[QStringLiteral("type")] = QString::fromStdString(toString(item.type));
+        entry[QStringLiteral("duration")] = item.durationSeconds;
+        media.append(entry);
+    }
+    root[QStringLiteral("media")] = media;
+
+    QJsonArray tracks;
+    if (timeline_) {
+        for (const auto& track : timeline_->tracks()) {
+            QJsonObject trackObject;
+            trackObject[QStringLiteral("name")] = QString::fromStdString(track.name);
+            trackObject[QStringLiteral("audio")] = track.audio;
+            QJsonArray clips;
+            for (const auto& clip : track.clips) {
+                QJsonObject clipObject;
+                clipObject[QStringLiteral("mediaIndex")] = static_cast<qint64>(clip.mediaIndex);
+                clipObject[QStringLiteral("trackIndex")] = clip.trackIndex;
+                clipObject[QStringLiteral("start")] = clip.startSeconds;
+                clipObject[QStringLiteral("duration")] = clip.durationSeconds;
+                clipObject[QStringLiteral("sourceIn")] = clip.sourceInSeconds;
+                clipObject[QStringLiteral("sourceOut")] = clip.sourceOutSeconds;
+                clipObject[QStringLiteral("opacity")] = clip.opacity;
+                clipObject[QStringLiteral("scale")] = clip.scale;
+                clips.append(clipObject);
+            }
+            trackObject[QStringLiteral("clips")] = clips;
+            tracks.append(trackObject);
+        }
+    }
+    root[QStringLiteral("tracks")] = tracks;
+
+    QSaveFile file(target);
+    if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        QMessageBox::warning(this, QStringLiteral("Sauvegarde impossible"), QStringLiteral("Le fichier de projet ne peut pas être écrit."));
+        return;
+    }
+    appendLog(QStringLiteral("Projet sauvegardé : %1").arg(target));
+    statusBar()->showMessage(QStringLiteral("Projet CineForge sauvegardé"));
+}
+
+void MainWindow::openProject() {
+    const auto target = QFileDialog::getOpenFileName(this, QStringLiteral("Ouvrir un projet CineForge"), QString(), QStringLiteral("Projet CineForge (*.cineforge)"));
+    if (target.isEmpty()) return;
+    QFile file(target);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, QStringLiteral("Ouverture impossible"), QStringLiteral("Le fichier de projet ne peut pas être lu."));
+        return;
+    }
+    QJsonParseError parseError;
+    const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        QMessageBox::warning(this, QStringLiteral("Projet invalide"), parseError.errorString());
+        return;
+    }
+    const auto root = document.object();
+    const auto input = root.value(QStringLiteral("inputDirectory")).toString();
+    if (input.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Projet incomplet"), QStringLiteral("Le dossier média du projet est absent."));
+        return;
+    }
+    importFolder(std::filesystem::path(input.toStdString()));
+    if (outputEdit_) outputEdit_->setText(root.value(QStringLiteral("outputFile")).toString(outputEdit_->text()));
+
+    std::vector<TimelineTrack> tracks;
+    for (const auto& trackValue : root.value(QStringLiteral("tracks")).toArray()) {
+        const auto trackObject = trackValue.toObject();
+        TimelineTrack track;
+        track.name = trackObject.value(QStringLiteral("name")).toString().toStdString();
+        track.audio = trackObject.value(QStringLiteral("audio")).toBool();
+        for (const auto& clipValue : trackObject.value(QStringLiteral("clips")).toArray()) {
+            const auto clipObject = clipValue.toObject();
+            TimelineClip clip;
+            clip.mediaIndex = static_cast<std::size_t>(clipObject.value(QStringLiteral("mediaIndex")).toInteger());
+            clip.trackIndex = clipObject.value(QStringLiteral("trackIndex")).toInt();
+            clip.startSeconds = clipObject.value(QStringLiteral("start")).toDouble();
+            clip.durationSeconds = clipObject.value(QStringLiteral("duration")).toDouble(3.0);
+            clip.sourceInSeconds = clipObject.value(QStringLiteral("sourceIn")).toDouble();
+            clip.sourceOutSeconds = clipObject.value(QStringLiteral("sourceOut")).toDouble();
+            clip.opacity = clipObject.value(QStringLiteral("opacity")).toDouble(1.0);
+            clip.scale = clipObject.value(QStringLiteral("scale")).toDouble(1.0);
+            track.clips.push_back(clip);
+        }
+        tracks.push_back(track);
+    }
+    if (timeline_ && !tracks.empty()) timeline_->setTracks(tracks);
+    appendLog(QStringLiteral("Projet ouvert : %1").arg(target));
+    statusBar()->showMessage(QStringLiteral("Projet CineForge ouvert"));
+}
+
 void MainWindow::chooseFolder() {
     const auto folder = QFileDialog::getExistingDirectory(this, QStringLiteral("Choisir le dossier média"));
     if (!folder.isEmpty()) importFolder(std::filesystem::path(folder.toStdString()));
@@ -396,6 +545,19 @@ void MainWindow::importFolder(const std::filesystem::path& folder) {
     outputEdit_->setText(QString::fromStdString((folder / "output.mp4").string()));
     statusBar()->showMessage(QStringLiteral("%1 média(s) importé(s) depuis %2").arg(currentMedia_.size()).arg(QString::fromStdString(folder.string())));
     previewLabel_->setText(QStringLiteral("Projet chargé\n\n%1 média(s) • prêt pour le montage").arg(currentMedia_.size()));
+    for (const auto& item : currentMedia_) {
+        if (item.type == MediaType::Video) {
+            loadPreviewFile(item.path);
+            break;
+        }
+    }
+}
+
+void MainWindow::loadPreviewFile(const std::filesystem::path& file) {
+    if (!player_ || file.empty()) return;
+    player_->setSource(QUrl::fromLocalFile(QString::fromStdString(file.string())));
+    if (previewStack_ && videoWidget_) previewStack_->setCurrentWidget(videoWidget_);
+    appendLog(QStringLiteral("Prévisualisation chargée : %1").arg(QString::fromStdString(file.filename().string())));
 }
 
 void MainWindow::rescanCurrentFolder() {
@@ -451,7 +613,13 @@ void MainWindow::startRender() {
     project.scanMedia();
     auto plan = project.makePlan();
     LocalAgent agent;
-    const auto interpreted = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
+    RenderPlan interpreted;
+    if (agentModelEdit_ && !agentModelEdit_->text().isEmpty()) {
+        appendLog(QStringLiteral("Appel de l'agent GGUF local…"));
+        interpreted = agent.interpretWithGguf(commandEdit_->text().toStdString(), agentModelEdit_->text().toStdString(), currentFolder_);
+    } else {
+        interpreted = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
+    }
     plan.options = interpreted.options;
     plan.media = currentMedia_;
     plan.outputFile = outputEdit_->text().toStdString();
@@ -500,6 +668,7 @@ void MainWindow::startRender() {
     renderButton_->setEnabled(true);
     if (success) {
         previewLabel_->setText(QStringLiteral("Export terminé\n\n%1").arg(QString::fromStdString(plan.outputFile.string())));
+        loadPreviewFile(plan.outputFile);
         QMessageBox::information(this, QStringLiteral("Export terminé"), QStringLiteral("La vidéo a été créée hors ligne."));
     } else {
         appendLog(QStringLiteral("Erreur : %1").arg(QString::fromStdString(error)));
