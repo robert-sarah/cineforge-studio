@@ -21,7 +21,7 @@
 
 CineForge Studio organise les projets en **chapitres**, afin de préparer des documentaires de 45 minutes, 3 heures ou davantage sans charger tous les médias en mémoire en même temps. `tools/analyze_media.py` analyse progressivement les fichiers et échantillonne les vidéos longues. `tools/generate_timeline.py` produit ensuite un projet `.cineforge` avec des chapitres, des pistes et des clips. Avant le rendu, `tools/validate_project.py projet.cineforge` vérifie les index médias, les durées, les trous et les incohérences de timeline.
 
-Le moteur FFmpeg rend chaque chapitre séparément dans `.cineforge_cache/`, vérifie les fichiers générés et conserve un manifeste `render_state.txt` pendant le traitement. En cas d’interruption, les chapitres valides peuvent être réutilisés au prochain lancement. Les proxies restent recommandés pour les sources 4K et les projets de plusieurs heures.
+Le moteur FFmpeg rend chaque chapitre séparément dans `.cineforge_cache/`, vérifie les fichiers générés et conserve un manifeste `render_state.txt` pendant le traitement. `tools/check_capabilities.py` inspecte les encodeurs réellement disponibles et recommande automatiquement NVENC, VAAPI, QSV, VideoToolbox ou libx264 selon la machine. En cas d’interruption, les chapitres valides peuvent être réutilisés au prochain lancement. Les proxies restent recommandés pour les sources 4K et les projets de plusieurs heures.
 
 ```bash
 python3 tools/analyze_media.py ./mes_medias --vision --sample-seconds 5 --output catalog.json
