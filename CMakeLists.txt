@@ -28,9 +28,15 @@ target_link_libraries(cineforge-cli PRIVATE cineforge_core)
 if (CINEFORGE_BUILD_GUI)
     find_package(Qt6 COMPONENTS Widgets Multimedia MultimediaWidgets QUIET)
     if (Qt6_FOUND)
-        set(CMAKE_AUTOMOC ON)
-        set(CMAKE_AUTOUIC ON)
-        set(CMAKE_AUTORCC ON)
+        if(NOT DEFINED CMAKE_AUTOMOC)
+            set(CMAKE_AUTOMOC ON)
+        endif()
+        if(NOT DEFINED CMAKE_AUTOUIC)
+            set(CMAKE_AUTOUIC ON)
+        endif()
+        if(NOT DEFINED CMAKE_AUTORCC)
+            set(CMAKE_AUTORCC ON)
+        endif()
         add_executable(cineforge-studio
             src/gui/MainWindow.cpp
             src/gui/TimelineWidget.cpp

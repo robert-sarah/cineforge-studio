@@ -27,6 +27,22 @@
       }
     },
     {
+      "name": "windows-mingw-qt6",
+      "displayName": "CineForge Windows MinGW Qt6",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build/windows-mingw-qt6",
+      "toolchainFile": "${sourceDir}/mingw-toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "/opt/Qt/6.4.2/mingw_64",
+        "QT_HOST_PATH": "/usr",
+        "CMAKE_AUTOMOC_EXECUTABLE": "/usr/lib/qt6/libexec/moc",
+        "CMAKE_AUTOUIC": "OFF",
+        "CMAKE_AUTORCC": "OFF",
+        "CINEFORGE_BUILD_GUI": "ON"
+      }
+    },
+    {
       "name": "portable-cli",
       "displayName": "CineForge Portable CLI",
       "generator": "Unix Makefiles",
@@ -45,6 +61,10 @@
     {
       "name": "portable-cli",
       "configurePreset": "portable-cli"
+    },
+    {
+      "name": "windows-mingw-qt6",
+      "configurePreset": "windows-mingw-qt6"
     },
     {
       "name": "windows-release",
