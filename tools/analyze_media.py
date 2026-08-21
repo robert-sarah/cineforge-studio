@@ -61,11 +61,11 @@ def rational(value: str | None) -> float | None:
         return None
 
 
-def vision_metrics(path: Path, kind: str, sample_count: int = 12) -> dict[str, Any]:
+def vision_metrics(path: Path, kind: str, duration_seconds: float = 0.0, sample_seconds: float = 5.0, sample_count: int | None = None) -> dict[str, Any]:
     """Calcule des indices locaux, sans reconnaissance distante ni modification du fichier."""
     if cv2 is None or kind not in {"image", "video"}:
         return {"vision_available": False, "face_count_max": None, "blur_score": None, "scene_cuts_estimate": None}
-    frames = []
+    frames: list[tuple[float, Any]] = []
     capture = None
     try:
         if kind == "image":
@@ -75,21 +75,31 @@ def vision_metrics(path: Path, kind: str, sample_count: int = 12) -> dict[str, A
         else:
             capture = cv2.VideoCapture(str(path))
             total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+            inferred_duration = duration_seconds or (total / fps if fps > 0 else 0.0)
+            count = sample_count or max(12, min(2400, int(inferred_duration / max(0.5, sample_seconds)) + 1))
             if total > 0:
-                for position in range(min(sample_count, total)):
-                    capture.set(cv2.CAP_PROP_POS_FRAMES, int(position * max(0, total - 1) / max(1, sample_count - 1)))
+                for index in range(min(count, total)):
+                    position = int(index * max(0, total - 1) / max(1, min(count, total) - 1))
+                    capture.set(cv2.CAP_PROP_POS_FRAMES, position)
                     ok, frame = capture.read()
                     if ok and frame is not None:
-                        frames.append(frame)
+                        timestamp = position / fps if fps > 0 else 0.0
+                        frames.append((timestamp, frame))
+        if kind == "image":
+            image = cv2.imread(str(path))
+            if image is not None:
+                frames = [(0.0, image)]
         if not frames:
-            return {"vision_available": True, "face_count_max": 0, "blur_score": None, "scene_cuts_estimate": 0}
+            return {"vision_available": True, "face_count_max": 0, "blur_score": None, "scene_cuts_estimate": 0, "scene_cut_times": []}
         cascade_path = str(Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml")
         detector = cv2.CascadeClassifier(cascade_path)
         face_count_max = 0
         blur_scores = []
         scene_cuts = 0
         previous = None
-        for frame in frames:
+        scene_cut_times: list[float] = []
+        for timestamp, frame in frames:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4) if not detector.empty() else []
             face_count_max = max(face_count_max, len(faces))
@@ -97,12 +107,14 @@ def vision_metrics(path: Path, kind: str, sample_count: int = 12) -> dict[str, A
             small = cv2.resize(gray, (64, 36))
             if previous is not None and float(cv2.absdiff(previous, small).mean()) > 35.0:
                 scene_cuts += 1
+                scene_cut_times.append(round(timestamp, 3))
             previous = small
         return {
             "vision_available": True,
             "face_count_max": face_count_max,
             "blur_score": round(sum(blur_scores) / len(blur_scores), 2),
             "scene_cuts_estimate": scene_cuts,
+            "scene_cut_times": scene_cut_times,
         }
     except Exception as exc:
         return {"vision_available": True, "vision_error": str(exc), "face_count_max": None, "blur_score": None, "scene_cuts_estimate": None}
@@ -111,7 +123,7 @@ def vision_metrics(path: Path, kind: str, sample_count: int = 12) -> dict[str, A
             capture.release()
 
 
-def analyze(path: Path, root: Path, ffprobe_executable: str, vision: bool = False) -> dict[str, Any]:
+def analyze(path: Path, root: Path, ffprobe_executable: str, vision: bool = False, sample_seconds: float = 5.0) -> dict[str, Any]:
     kind = media_kind(path)
     stat = path.stat()
     data = ffprobe(path, ffprobe_executable) if kind != "unknown" else {}
@@ -123,7 +135,7 @@ def analyze(path: Path, root: Path, ffprobe_executable: str, vision: bool = Fals
     height = int(video.get("height") or 0)
     duration = float(format_data.get("duration") or 0.0)
     sharpness_hint = min(1.0, (width * height) / (1920 * 1080)) if width and height else None
-    metrics = vision_metrics(path, kind) if vision else {"vision_available": False}
+    metrics = vision_metrics(path, kind, duration_seconds=duration, sample_seconds=sample_seconds) if vision else {"vision_available": False}
     return {
         "path": str(path.resolve()),
         "relative_path": str(path.relative_to(root)),
@@ -153,6 +165,7 @@ def main() -> int:
     parser.add_argument("-o", "--output", type=Path, default=None)
     parser.add_argument("--ffprobe", default="ffprobe")
     parser.add_argument("--vision", action="store_true", help="Activer les métriques locales de netteté, visages et scènes (OpenCV requis)")
+    parser.add_argument("--sample-seconds", type=float, default=5.0, help="Intervalle d'échantillonnage pour les vidéos longues")
     args = parser.parse_args()
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
@@ -162,7 +175,7 @@ def main() -> int:
     items = []
     for path in sorted(root.rglob("*")):
         if path.is_file() and media_kind(path) != "unknown":
-            items.append(analyze(path, root, args.ffprobe, vision=args.vision))
+            items.append(analyze(path, root, args.ffprobe, vision=args.vision, sample_seconds=args.sample_seconds))
 
     result = {
         "schema": "cineforge-media-analysis/v1",

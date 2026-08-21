@@ -17,6 +17,18 @@
 - **Modèles de Montage** : MrBeast, Cinématique, Shorts, Vlog, Documentaire, Gaming, Podcast et Tutoriel.
 - **Interface Qt Professionnelle** : thématique sombre, inspecteur, panneaux dockables et gestionnaire de modèles locaux.
 
+## Workflow long-form
+
+CineForge Studio organise les projets en **chapitres**, afin de préparer des documentaires de 45 minutes, 3 heures ou davantage sans charger tous les médias en mémoire en même temps. `tools/analyze_media.py` analyse progressivement les fichiers et échantillonne les vidéos longues. `tools/generate_timeline.py` produit ensuite un projet `.cineforge` avec des chapitres, des pistes et des clips. Avant le rendu, `tools/validate_project.py projet.cineforge` vérifie les index médias, les durées, les trous et les incohérences de timeline.
+
+Le moteur FFmpeg rend chaque chapitre séparément dans `.cineforge_cache/`, vérifie les fichiers générés et conserve un manifeste `render_state.txt` pendant le traitement. En cas d’interruption, les chapitres valides peuvent être réutilisés au prochain lancement. Les proxies restent recommandés pour les sources 4K et les projets de plusieurs heures.
+
+```bash
+python3 tools/analyze_media.py ./mes_medias --vision --sample-seconds 5 --output catalog.json
+python3 tools/generate_timeline.py ./mes_medias catalog.json --style documentary --chapter-minutes 12 --output documentaire.cineforge
+python3 tools/validate_project.py documentaire.cineforge
+```
+
 ## Compilation (Linux / WSL)
 
 Assurez-vous d'avoir installé `cmake`, un compilateur C++ (gcc/clang), `ffmpeg` et `qt6-base-dev`.

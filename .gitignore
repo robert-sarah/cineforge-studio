@@ -14,3 +14,14 @@ CMakeUserPresets.json
 __pycache__/
 *.pyc
 .cineforge-cache/
+
+# Artefacts CMake locaux
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+*.a
+cineforge-cli
+cineforge-studio
+cineforge-studio_autogen/
+.qt/

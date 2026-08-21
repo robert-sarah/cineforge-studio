@@ -138,8 +138,16 @@ RenderPlan Project::makePlan() const {
         videoTrack.clips.push_back(clip);
         videoCursor += duration;
     }
-    if (!videoTrack.clips.empty()) plan.tracks.push_back(videoTrack);
-    if (!audioTrack.clips.empty()) plan.tracks.push_back(audioTrack);
+    Chapter defaultChapter;
+    defaultChapter.title = "Chapitre 1";
+    defaultChapter.startTime = 0.0;
+    defaultChapter.duration = videoCursor;
+    defaultChapter.segmentOutputFile = "output_chapter_1.mp4";
+
+    if (!videoTrack.clips.empty()) defaultChapter.tracks.push_back(videoTrack);
+    if (!audioTrack.clips.empty()) defaultChapter.tracks.push_back(audioTrack);
+
+    plan.chapters.push_back(defaultChapter);
     return plan;
 }
 

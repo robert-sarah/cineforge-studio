@@ -68,12 +68,20 @@ struct RenderOptions {
     std::filesystem::path musicFile;
 };
 
+struct Chapter {
+    std::string title;
+    double startTime = 0.0;
+    double duration = 0.0;
+    std::vector<TimelineTrack> tracks;
+    std::vector<SubtitleCue> subtitles;
+    std::filesystem::path segmentOutputFile;
+};
+
 struct RenderPlan {
     std::filesystem::path inputDirectory;
     std::filesystem::path outputFile = "output.mp4";
     std::vector<MediaItem> media;
-    std::vector<TimelineTrack> tracks;
-    std::vector<SubtitleCue> subtitles;
+    std::vector<Chapter> chapters; // Remplace la timeline globale plate pour les formats longs
     RenderOptions options;
     std::string style = "standard";
     std::string narrationText;
