@@ -1,0 +1,55 @@
+# CineForge Studio
+
+**CineForge Studio** est un logiciel de montage vidéo C++/Qt **entièrement hors ligne**, piloté par un agent local et un moteur de rendu FFmpeg. Il est conçu pour automatiser l'organisation et l'édition de tous types de contenus multimédias (vidéos virales, formats cinématiques, documentaires), sans jamais envoyer vos médias sur un serveur distant.
+
+## Nouveautés de la version Studio
+
+- **Interface Professionnelle (Qt 6)** : Panneaux sombres dockables, bibliothèque média, timeline multipiste, lecteur de prévisualisation et inspecteur de rendu.
+- **Modèles de Montage (Templates)** : 
+  - *MrBeast / High Energy* : Format vertical 9:16, cuts rapides, zooms continus, sous-titres Impact massifs avec contour et ombre.
+  - *Cinématique* : Format paysage 16:9, rythme doux, police Arial sobre, zooms légers.
+- **Gestionnaire de Modèles Locaux** : Un onglet dédié pour vérifier, télécharger et activer les modèles IA sans jamais envoyer de données en ligne.
+  - *Sous-titres* : Whisper.cpp (modèles `ggml-tiny.bin`, `base`, `small`).
+  - *Voix Off* : Piper TTS (voix neuronales très légères comme `fr_FR-siwis-medium.onnx`).
+  - *Agent Local* : llama.cpp (pour la compréhension avancée des instructions).
+
+## Compilation (Linux / WSL)
+
+Assurez-vous d'avoir installé `cmake`, un compilateur C++ (gcc/clang), `ffmpeg` et `qt6-base-dev`.
+
+```bash
+mkdir build && cd build
+cmake .. -DOVA_BUILD_GUI=ON
+cmake --build . -j$(nproc)
+```
+
+## Utilisation de l'interface
+
+Lancez l'application avec :
+```bash
+./bin/cineforge-studio
+```
+
+1. Cliquez sur **Importer un dossier** pour charger vos images et vidéos.
+2. Dans l'onglet **Styles**, choisissez "MrBeast / High Energy" pour appliquer automatiquement le plan viral.
+3. Dans l'onglet **Modèles**, vérifiez que les modèles locaux sont installés (ex. `ggml-tiny.bin`). Un double-clic les associe au projet.
+4. Dans l'**Inspecteur**, ajustez le script de la voix off.
+5. Cliquez sur **Créer la vidéo**. Le moteur C++ va :
+   - Générer la voix off via Piper.
+   - Transcrire l'audio via Whisper pour générer un fichier `.srt`.
+   - Utiliser FFmpeg pour appliquer les zooms, incruster les sous-titres avec le style viral, et assembler le tout.
+
+## Utilisation du CLI
+
+Le moteur reste utilisable en ligne de commande pour l'automatisation :
+```bash
+./bin/cineforge-cli --folder ./mon_dossier --command "crée un short viral dynamique mrbeast"
+```
+
+## Installation des modèles locaux
+
+Un script sécurisé est fourni pour télécharger les modèles Whisper officiels :
+```bash
+./tools/download_models.sh models whisper-tiny
+```
+Les autres modèles (Piper, GGUF) doivent être placés manuellement dans le dossier `models/` pour respecter leurs licences respectives.

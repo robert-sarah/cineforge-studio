@@ -1,0 +1,13 @@
+build/
+exports/
+*.mp4
+*.wav
+*.srt
+media/*
+test_media/*
+models/*.bin
+models/*.onnx
+models/*.json
+models/*.gguf
+.DS_Store
+CMakeUserPresets.json
