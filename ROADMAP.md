@@ -1,30 +1,30 @@
-# Roadmap CineForge Studio
+# CineForge Studio Roadmap
 
-CineForge Studio est en plein développement pour devenir un logiciel de montage C++/Qt professionnel complet et entièrement hors ligne.
+CineForge Studio is in active development to become a complete, professional, and fully offline C++/Qt video editing software.
 
-## Phase 1 : Le Moteur Agentique (Terminée)
-- [x] Architecture C++ et Qt 6.
-- [x] Intégration de FFmpeg pour le rendu et le zoom (Ken Burns).
-- [x] Services IA locaux : Piper (TTS) et Whisper (Transcription).
-- [x] Styles de rendu automatiques (MrBeast viral, Cinématique paysage).
-- [x] Gestionnaire de modèles locaux pour les poids `.onnx` et `.bin`.
-- [x] Import récursif et tri automatique (naturel, alphabétique, chronologique).
+## Phase 1: The Agentic Engine (Completed)
+- [x] C++ and Qt 6 Architecture.
+- [x] FFmpeg integration for rendering and zooming (Ken Burns).
+- [x] Local AI Services: Piper (TTS) and Whisper (Transcription).
+- [x] Automatic rendering styles (Viral MrBeast, Cinematic landscape).
+- [x] Local models manager for `.onnx` and `.bin` weights.
+- [x] Recursive import and automatic sorting (natural, alphabetical, chronological).
 
-## Phase 2 : La Timeline Interactive (En cours)
-- [ ] Glisser-déposer de médias depuis la bibliothèque vers la timeline.
-- [ ] Outil de découpe (Cut/Razor) pour scinder les clips.
-- [ ] Déplacement et ajustement libre de la durée des blocs.
-- [ ] Mixeur audio multi-pistes (musique, SFX, voix).
-- [ ] Aperçu GPU en temps réel avec OpenGL/Vulkan dans Qt.
+## Phase 2: The Interactive Timeline (In Progress)
+- [ ] Drag-and-drop media from the library to the timeline.
+- [ ] Cutting tool (Cut/Razor) to split clips.
+- [ ] Free movement and duration adjustment of blocks.
+- [ ] Multi-track audio mixer (music, SFX, voice).
+- [ ] Real-time GPU preview with OpenGL/Vulkan in Qt.
 
-## Phase 3 : Le Montage Intelligent Universel
-- [ ] **Détection de scènes** : Analyse des vidéos importées pour isoler automatiquement les meilleurs plans.
-- [ ] **Agent Scénariste** : Connexion avec `llama.cpp` pour générer le texte de la voix off à partir d'un thème.
-- [ ] **Éditeur de Sous-titres Avancé** : Animation mot par mot, couleurs personnalisées et karaoké.
-- [ ] **Effets Sonores Automatiques (Auto-SFX)** : Ajout de bruits (whoosh, pop) sur les transitions et apparitions de texte.
-- [ ] Bibliothèque d'effets visuels et de transitions (Glitch, Fade, Blur).
+## Phase 3: Universal Smart Editing
+- [ ] **Scene Detection**: Analysis of imported videos to automatically isolate the best shots.
+- [ ] **Screenwriter Agent**: Connection with `llama.cpp` to generate voiceover text from a theme.
+- [ ] **Advanced Subtitle Editor**: Word-by-word animation, custom colors, and karaoke.
+- [ ] **Automatic Sound Effects (Auto-SFX)**: Adding noises (whoosh, pop) on transitions and text appearances.
+- [ ] Visual effects and transitions library (Glitch, Fade, Blur).
 
-## Phase 4 : Distribution et Écosystème
-- [ ] Installateur Windows (MSI/NSIS) pré-packagé avec FFmpeg.
-- [ ] Support des formats proxy pour le montage fluide de vidéos 4K.
-- [ ] Interface de plugins C++ pour ajouter de nouveaux générateurs (images, musique).
+## Phase 4: Distribution and Ecosystem
+- [ ] Windows Installer (MSI/NSIS) pre-packaged with FFmpeg.
+- [ ] Proxy formats support for smooth 4K video editing.
+- [ ] C++ plugin interface to add new generators (images, music).

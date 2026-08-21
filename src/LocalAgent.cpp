@@ -147,12 +147,12 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
     const auto promptFile = work / "prompt.txt";
     const auto resultFile = work / "result.txt";
     const std::string prompt =
-        "Tu es l'agent local de CineForge Studio. Analyse la demande de montage et reponds uniquement avec un JSON compact. "
+        "You are the local agent of CineForge Studio. Analyze the editing request and reply only with a compact JSON. "
         "Schema: {\\\"style\\\":\\\"high-energy|cinematic|documentary|vlog|gaming|podcast|tutorial|standard\\\","
-        "\\\"width\\\":1080 ou 1920,\\\"height\\\":1080 ou 1920,\\\"zoom\\\":true ou false,"
-        "\\\"subtitles\\\":true ou false,\\\"remove_silences\\\":true ou false,"
-        "\\\"normalize_audio\\\":true ou false,\\\"duck_music\\\":true ou false,"
-        "\\\"use_proxies\\\":true ou false}. Demande: " + instruction;
+        "\\\"width\\\":1080 or 1920,\\\"height\\\":1080 or 1920,\\\"zoom\\\":true or false,"
+        "\\\"subtitles\\\":true or false,\\\"remove_silences\\\":true or false,"
+        "\\\"normalize_audio\\\":true or false,\\\"duck_music\\\":true or false,"
+        "\\\"use_proxies\\\":true or false}. Request: " + instruction;
     {
         std::ofstream file(promptFile);
         file << prompt;
@@ -183,11 +183,11 @@ RenderPlan LocalAgent::interpretWithGguf(const std::string& instruction,
 
 std::string LocalAgent::explainPlan(const RenderPlan& plan) const {
     std::ostringstream out;
-    out << "Plan local : style=" << plan.style << ", format=" << plan.options.width << "x"
+    out << "Local plan: style=" << plan.style << ", format=" << plan.options.width << "x"
         << plan.options.height << " @ " << plan.options.fps << " fps, "
-        << plan.media.size() << " média(s), zoom=" << (plan.options.addZoomToImages ? "oui" : "non")
-        << ", sous-titres=" << (plan.options.burnSubtitles ? "oui" : "non")
-        << ", audio_pro=" << (plan.options.loudnessNormalization ? "oui" : "non");
+        << plan.media.size() << " media, zoom=" << (plan.options.addZoomToImages ? "yes" : "no")
+        << ", subtitles=" << (plan.options.burnSubtitles ? "yes" : "no")
+        << ", audio_pro=" << (plan.options.loudnessNormalization ? "yes" : "no");
     return out.str();
 }
 

@@ -1,23 +1,23 @@
-# Sources officielles des modèles locaux
+# Official Sources for Local Models
 
 ## whisper.cpp
 
-Source : https://github.com/ggml-org/whisper.cpp
+Source: https://github.com/ggml-org/whisper.cpp
 
-La documentation officielle indique que les modèles convertis au format ggml peuvent être téléchargés avec `sh ./models/download-ggml-model.sh base.en`. Le binaire `whisper-cli` se compile avec CMake puis transcrit un fichier WAV. La documentation précise aussi que l’entrée attendue par l’exemple CLI est un WAV 16 bits ; FFmpeg peut convertir une source en `16000 Hz`, mono, PCM signé 16 bits avec `ffmpeg -i input.mp3 -ar 16000 -ac 1 -c:a pcm_s16le output.wav`. Les modèles ggml regroupent les paramètres, filtres mel, vocabulaire et poids dans un fichier binaire local.
+The official documentation indicates that models converted to the ggml format can be downloaded with `sh ./models/download-ggml-model.sh base.en`. The `whisper-cli` binary compiles with CMake and then transcribes a WAV file. The documentation also specifies that the expected input for the CLI example is a 16-bit WAV; FFmpeg can convert a source to `16000 Hz`, mono, signed 16-bit PCM with `ffmpeg -i input.mp3 -ar 16000 -ac 1 -c:a pcm_s16le output.wav`. The ggml models bundle the parameters, mel filters, vocabulary, and weights into a local binary file.
 
-## Piper et llama.cpp
+## Piper and llama.cpp
 
-Les pages officielles à vérifier avant d’ajouter des catalogues de téléchargement sont :
+The official pages to check before adding download catalogs are:
 
-- Piper : https://github.com/rhasspy/piper et https://huggingface.co/rhasspy/piper-voices
-- llama.cpp : https://github.com/ggml-org/llama.cpp
-- Documentation GGUF/llama.cpp : https://huggingface.co/docs/hub/en/gguf-llamacpp
+- Piper: https://github.com/rhasspy/piper and https://huggingface.co/rhasspy/piper-voices
+- llama.cpp: https://github.com/ggml-org/llama.cpp
+- GGUF/llama.cpp Documentation: https://huggingface.co/docs/hub/en/gguf-llamacpp
 
-Les poids de modèles ne seront pas embarqués automatiquement dans l’archive de l’application : leur taille, leur licence et la compatibilité matérielle varient. L’application doit proposer un gestionnaire local permettant d’importer un fichier, de vérifier son existence et d’indiquer son chemin, tandis que l’utilisateur choisit explicitement les modèles qu’il souhaite installer.
+Model weights will not be automatically bundled into the application archive: their size, license, and hardware compatibility vary. The application must provide a local manager allowing users to import a file, verify its existence, and indicate its path, while the user explicitly chooses the models they want to install.
 
-## Vérification du 21 août 2026
+## Verification on August 21, 2026
 
-Le script officiel whisper.cpp récupère les modèles depuis `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-<nom>.bin`. Le catalogue intégré peut donc proposer notamment `tiny`, `base`, `small`, `medium`, `large-v3` et `large-v3-turbo`, tout en laissant l’utilisateur choisir selon sa mémoire et son processeur.
+The official whisper.cpp script retrieves models from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-<name>.bin`. The built-in catalog can therefore offer options such as `tiny`, `base`, `small`, `medium`, `large-v3`, and `large-v3-turbo`, leaving the user to choose based on their memory and processor.
 
-Le dépôt historique `rhasspy/piper` est archivé depuis le 6 octobre 2025 et renvoie vers `https://github.com/OHF-Voice/piper1-gpl`. Les voix historiques sont visibles sur `https://huggingface.co/rhasspy/piper-voices`. L’application doit afficher cette provenance et ne pas redistribuer les poids sans vérifier les licences individuelles.
+The historical repository `rhasspy/piper` has been archived since October 6, 2025, and points to `https://github.com/OHF-Voice/piper1-gpl`. The historical voices are visible at `https://huggingface.co/rhasspy/piper-voices`. The application must display this provenance and not redistribute the weights without checking individual licenses.

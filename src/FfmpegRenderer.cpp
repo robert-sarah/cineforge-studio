@@ -38,7 +38,7 @@ std::string filterPath(const std::filesystem::path& value) {
 
 bool run(const std::string& command, std::string* error) {
     const int code = std::system(command.c_str());
-    if (code != 0 && error) *error = "Commande FFmpeg échouée (code " + std::to_string(code) + ")";
+    if (code != 0 && error) *error = "FFmpeg command failed (code " + std::to_string(code) + ")";
     return code == 0;
 }
 
@@ -65,7 +65,7 @@ bool FfmpegRenderer::writeSubtitleFile(const std::vector<SubtitleCue>& cues,
                                         std::string* error) const {
     std::ofstream output(destination);
     if (!output) {
-        if (error) *error = "Impossible d'écrire le fichier de sous-titres : " + destination.string();
+        if (error) *error = "Cannot write subtitles file: " + destination.string();
         return false;
     }
 
@@ -95,7 +95,7 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
                             const ProgressCallback& progress,
                             std::string* error) const {
     if (plan.chapters.empty()) {
-        if (error) *error = "Aucun chapitre défini dans le projet.";
+        if (error) *error = "No chapter defined in the project.";
         return false;
     }
 
@@ -106,7 +106,7 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
     const auto masterConcatFile = work / "master_concat.txt";
     std::ofstream masterConcat(masterConcatFile);
     if (!masterConcat) {
-        if (error) *error = "Impossible de créer le fichier de concaténation maître.";
+        if (error) *error = "Cannot create master concatenation file.";
         return false;
     }
 
@@ -126,7 +126,7 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
         // Un chapitre vide ne doit jamais être ajouté au manifeste concat.
         if (visualCount == 0) {
             if (progress) progress(static_cast<double>(cIdx + 1) / plan.chapters.size() * 0.9,
-                                   "Chapitre vide ignoré : " + std::to_string(cIdx + 1));
+                                   "Empty chapter skipped: " + std::to_string(cIdx + 1));
             continue;
         }
 
@@ -136,14 +136,14 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
         // Reprise après interruption : un chapitre valide est réutilisé.
         if (std::filesystem::exists(chapterFile) && std::filesystem::file_size(chapterFile) > 1024) {
             if (progress) progress(static_cast<double>(cIdx + 1) / plan.chapters.size() * 0.9,
-                                   "Reprise du chapitre existant " + std::to_string(cIdx + 1));
+                                   "Resuming existing chapter " + std::to_string(cIdx + 1));
             continue;
         }
 
         const auto chapterConcatFile = work / ("concat_c" + std::to_string(cIdx) + ".txt");
         std::ofstream chapterConcat(chapterConcatFile);
         if (!chapterConcat) {
-            if (error) *error = "Impossible de créer le manifeste du chapitre " + std::to_string(cIdx + 1);
+            if (error) *error = "Cannot create manifest for chapter " + std::to_string(cIdx + 1);
             return false;
         }
 
@@ -179,7 +179,7 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
                 command += " " + quote(segment);
 
                 if (progress) progress(static_cast<double>(cIdx) / plan.chapters.size() * 0.9,
-                                       "Chapitre " + std::to_string(cIdx + 1) + " - Plan " + std::to_string(clipIndex) + "/" + std::to_string(visualCount));
+                                       "Chapter " + std::to_string(cIdx + 1) + " - Shot " + std::to_string(clipIndex) + "/" + std::to_string(visualCount));
                 if (!run(command, error)) return false;
                 chapterConcat << "file " << quote(segment) << "\n";
             }
@@ -193,14 +193,14 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
             return false;
         }
         if (!std::filesystem::exists(chapterFile) || std::filesystem::file_size(chapterFile) <= 1024) {
-            if (error) *error = "Le chapitre " + std::to_string(cIdx + 1) + " n'a pas produit un fichier valide.";
+            if (error) *error = "Chapter " + std::to_string(cIdx + 1) + " did not produce a valid file.";
             writeRenderState(stateFile, "failed", cIdx + 1, plan.chapters.size(), error ? *error : "invalid chapter");
             return false;
         }
     }
     masterConcat.close();
     if (std::filesystem::file_size(masterConcatFile) == 0) {
-        if (error) *error = "Aucun plan vidéo valide à assembler dans les chapitres.";
+        if (error) *error = "No valid video shots to assemble in the chapters.";
         return false;
     }
 
@@ -260,11 +260,11 @@ bool FfmpegRenderer::render(const RenderPlan& plan,
     if (hardware) finish += "-preset p4 -cq " + std::to_string(std::min(35, o.crf + 3));
     else finish += "-preset " + o.preset + " -crf " + std::to_string(o.crf);
     finish += " -movflags +faststart " + quote(plan.outputFile);
-    if (progress) progress(0.70, "Assemblage final et sous-titres");
+    if (progress) progress(0.70, "Final assembly and subtitles");
     const bool success = run(finish, error);
     if (success) writeRenderState(stateFile, "complete", plan.chapters.size(), plan.chapters.size(), plan.outputFile.string());
     else writeRenderState(stateFile, "failed", plan.chapters.size(), plan.chapters.size(), error ? *error : "final assemble failed");
-    if (success && progress) progress(1.0, "Export terminé : " + plan.outputFile.string());
+    if (success && progress) progress(1.0, "Export finished: " + plan.outputFile.string());
     std::error_code ignored;
     std::filesystem::remove_all(work, ignored);
     return success;

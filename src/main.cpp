@@ -7,21 +7,21 @@
 
 namespace {
 void usage(const char* program) {
-    std::cout << "Offline Video Agent - prototype 0.1\n\n"
+    std::cout << "CineForge Studio CLI - prototype 0.1\n\n"
               << "Usage:\n"
-              << "  " << program << " --folder <dossier> [--output <fichier.mp4>]\n"
-              << "  " << program << " --folder <dossier> --command \"monte une vidéo virale...\"\n\n"
+              << "  " << program << " --folder <folder> [--output <file.mp4>]\n"
+              << "  " << program << " --folder <folder> --command \"edit a viral video...\"\n\n"
               << "Options:\n"
-              << "  --folder        Dossier contenant images et vidéos\n"
-              << "  --output        Fichier MP4 de sortie\n"
-              << "  --command       Instruction locale en français\n"
-              << "  --subtitles     Fichier SRT à incruster\n"
-              << "  --voice         Fichier audio de voix off\n"
-              << "  --script        Texte à convertir en voix off avec Piper\n"
-              << "  --piper-model   Modèle Piper .onnx\n"
-              << "  --audio         Audio à transcrire avec Whisper\n"
-              << "  --whisper-model Modèle Whisper .bin\n"
-              << "  --no-zoom       Désactive le zoom animé sur les images\n"
+              << "  --folder        Folder containing images and videos\n"
+              << "  --output        Output MP4 file\n"
+              << "  --command       Local instruction in English\n"
+              << "  --subtitles     SRT file to burn in\n"
+              << "  --voice         Voiceover audio file\n"
+              << "  --script        Text to convert to voiceover with Piper\n"
+              << "  --piper-model   Piper .onnx model\n"
+              << "  --audio         Audio to transcribe with Whisper\n"
+              << "  --whisper-model Whisper .bin model\n"
+              << "  --no-zoom       Disable animated zoom on images\n"
               << "  --sort          natural | filename | date\n";
 }
 }
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     }
 
     if (folder.empty()) {
-        std::cerr << "Erreur : --folder est obligatoire.\n";
+        std::cerr << "Error: --folder is required.\n";
         return 2;
     }
 
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
         ova::PiperVoiceEngine piper;
         std::string serviceError;
         if (!piper.synthesize(script, piperModel, voice, &serviceError)) {
-            std::cerr << "Échec Piper : " << serviceError << "\n";
+            std::cerr << "Piper failed: " << serviceError << "\n";
             return 4;
         }
     }
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
         ova::WhisperSubtitleEngine whisper;
         std::string serviceError;
         if (!whisper.transcribe(audio, whisperModel, subtitles, &serviceError)) {
-            std::cerr << "Échec Whisper : " << serviceError << "\n";
+            std::cerr << "Whisper failed: " << serviceError << "\n";
             return 5;
         }
     }
@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
         }, &error);
 
     if (!success) {
-        std::cerr << "Échec : " << error << "\n";
+        std::cerr << "Failed: " << error << "\n";
         return 3;
     }
     return 0;

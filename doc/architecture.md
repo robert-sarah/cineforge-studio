@@ -1,28 +1,28 @@
-# Architecture CineForge Studio (Version Pro)
+# CineForge Studio Architecture (Pro Version)
 
-Ce document décrit l'architecture cible pour transformer CineForge Studio en un logiciel de montage complet, intelligent et professionnel.
+This document describes the target architecture to transform CineForge Studio into a complete, intelligent, and professional video editing software.
 
-## 1. Moteur C++ / Qt (Cœur)
-- **Timeline & UI** : Interface Qt 6 avec accélération OpenGL/Vulkan pour le lecteur vidéo et la timeline (QGraphicsView ou QML pour les performances).
-- **Rendu** : `libavcodec`/`libavfilter` (FFmpeg) en C++ natif pour la prévisualisation temps réel, le proxy vidéo, et le rendu final avec accélération matérielle (NVENC, VAAPI).
-- **Modèle de Projet** : Format JSON `.cineforge` gérant les pistes, clips, keyframes, transitions et effets. Sauvegarde automatique et historique Undo/Redo.
+## 1. C++ / Qt Engine (Core)
+- **Timeline & UI**: Qt 6 interface with OpenGL/Vulkan acceleration for the video player and timeline (QGraphicsView or QML for performance).
+- **Rendering**: `libavcodec`/`libavfilter` (FFmpeg) in native C++ for real-time preview, video proxying, and final rendering with hardware acceleration (NVENC, VAAPI).
+- **Project Model**: JSON `.cineforge` format managing tracks, clips, keyframes, transitions, and effects. Auto-save and Undo/Redo history.
 
-## 2. Services d'Analyse (Python)
-L'analyse intelligente des médias nécessite des bibliothèques plus adaptées (OpenCV, scikit-learn, librosa) pour :
-- **Détection de scènes** : Séparer les plans dans les vidéos longues.
-- **Analyse d'image** : Détecter les visages, le sujet principal, la netteté et le flou.
-- **Analyse audio** : Détecter les silences, la musique, et normaliser le volume.
-- *Intégration* : Ces scripts Python seront appelés par le moteur C++ via des processus légers communiquant en JSON ou via pybind11.
+## 2. Analysis Services (Python)
+Intelligent media analysis requires more suitable libraries (OpenCV, scikit-learn, librosa) for:
+- **Scene Detection**: Splitting shots in long videos.
+- **Image Analysis**: Detecting faces, main subject, sharpness, and blur.
+- **Audio Analysis**: Detecting silences, music, and normalizing volume.
+- *Integration*: These Python scripts will be called by the C++ engine via lightweight processes communicating in JSON or via pybind11.
 
-## 3. Agent Local et Modèles (C++ / GGUF)
-- **Llama.cpp** : Le cerveau de l'agent, utilisant un modèle GGUF local (ex. Llama 3 8B Instruct) pour transformer le langage naturel en JSON structuré (plan de montage, sélection de médias).
-- **Whisper.cpp** : Transcription et sous-titres précis (SRT/VTT/ASS).
-- **Piper TTS** : Génération de voix hors ligne, avec support de multiples locuteurs et réglages de débit.
+## 3. Local Agent and Models (C++ / GGUF)
+- **Llama.cpp**: The agent's brain, using a local GGUF model (e.g., Llama 3 8B Instruct) to transform natural language into structured JSON (editing plan, media selection).
+- **Whisper.cpp**: Accurate transcription and subtitles (SRT/VTT/ASS).
+- **Piper TTS**: Offline voice generation, with support for multiple speakers and speed adjustments.
 
-## 4. Pipeline de Montage Intelligent
-1. **Import** : L'utilisateur dépose un dossier.
-2. **Analyse (Python)** : Les médias sont analysés (scènes, qualité, audio).
-3. **Orchestration (Llama.cpp)** : L'agent reçoit le prompt utilisateur et les métadonnées des médias, puis produit un script JSON.
-4. **Assemblage (C++)** : Le moteur C++ convertit le JSON en timeline multipiste.
-5. **Édition Manuelle (Qt)** : L'utilisateur peut modifier librement la timeline, les cuts, les effets et les keyframes.
-6. **Export (FFmpeg)** : Rendu haute performance avec les presets sélectionnés.
+## 4. Smart Editing Pipeline
+1. **Import**: The user drops a folder.
+2. **Analysis (Python)**: Media is analyzed (scenes, quality, audio).
+3. **Orchestration (Llama.cpp)**: The agent receives the user prompt and media metadata, then produces a JSON script.
+4. **Assembly (C++)**: The C++ engine converts the JSON into a multitrack timeline.
+5. **Manual Editing (Qt)**: The user can freely modify the timeline, cuts, effects, and keyframes.
+6. **Export (FFmpeg)**: High-performance rendering with the selected presets.

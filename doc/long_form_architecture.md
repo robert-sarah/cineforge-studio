@@ -1,38 +1,38 @@
-# Architecture Long-Form : CineForge Studio
+# Long-Form Architecture: CineForge Studio
 
-Ce document définit les principes architecturaux permettant à CineForge Studio de traiter, monter et exporter des vidéos de très longue durée (documentaires de 45 minutes à 3 heures, cours complets, streams), tout en restant robuste, performant et 100% hors ligne.
+This document defines the architectural principles enabling CineForge Studio to process, edit, and export very long-form videos (45-minute to 3-hour documentaries, full courses, streams), while remaining robust, performant, and 100% offline.
 
-## 1. Défis des formats longs
-1. **Mémoire et UI :** Charger des centaines de clips et de vignettes (thumbnails) sur une timeline de 3 heures sature la RAM et ralentit l'interface.
-2. **Analyse IA :** Analyser 3 heures de vidéo scène par scène (visages, netteté) prendrait des jours sur un CPU classique.
-3. **Rendu FFmpeg :** Un export de 3 heures peut crasher (RAM, disque plein) ou être interrompu. Reprendre à zéro est inacceptable.
-4. **Narration :** Un agent local avec une petite fenêtre de contexte (ex. 2048 tokens) ne peut pas mémoriser ou structurer un documentaire entier.
+## 1. Challenges of Long-Form Formats
+1. **Memory and UI:** Loading hundreds of clips and thumbnails on a 3-hour timeline saturates RAM and slows down the interface.
+2. **AI Analysis:** Analyzing 3 hours of video scene by scene (faces, sharpness) would take days on a standard CPU.
+3. **FFmpeg Rendering:** A 3-hour export can crash (RAM, disk full) or be interrupted. Starting over from scratch is unacceptable.
+4. **Storytelling:** A local agent with a small context window (e.g., 2048 tokens) cannot memorize or structure an entire documentary.
 
-## 2. Solutions architecturales
+## 2. Architectural Solutions
 
-### 2.1 Timeline et Projet par Chapitres
-- Le modèle de projet `.cineforge` devient **hiérarchique** : `Projet -> Chapitres -> Pistes -> Clips`.
-- L'interface ne charge en mémoire détaillée que le **chapitre courant**. La vue globale affiche des blocs "Chapitres".
-- L'agent planifie d'abord un **squelette narratif** (liste des chapitres avec leur intention), puis génère le montage chapitre par chapitre.
+### 2.1 Timeline and Project by Chapters
+- The `.cineforge` project model becomes **hierarchical**: `Project -> Chapters -> Tracks -> Clips`.
+- The interface only loads the **current chapter** into detailed memory. The global view displays "Chapter" blocks.
+- The agent first plans a **narrative skeleton** (list of chapters with their intent), then generates the edit chapter by chapter.
 
-### 2.2 Rendu Segmenté et Concaténation (Concat Demuxer)
-- Le moteur C++ `FfmpegRenderer` n'essaie plus d'exporter 3 heures d'un coup.
-- Chaque chapitre est rendu dans un fichier temporaire : `chapter_01.mp4`, `chapter_02.mp4`.
-- En cas de crash ou d'interruption, le rendu **reprend uniquement au chapitre inachevé**.
-- À la fin, FFmpeg utilise le `concat demuxer` (ultra-rapide, sans réencodage) pour assembler les chapitres finaux.
+### 2.2 Segmented Rendering and Concatenation (Concat Demuxer)
+- The C++ engine `FfmpegRenderer` no longer tries to export 3 hours at once.
+- Each chapter is rendered into a temporary file: `chapter_01.mp4`, `chapter_02.mp4`.
+- In case of a crash or interruption, the render **resumes only at the unfinished chapter**.
+- At the end, FFmpeg uses the `concat demuxer` (ultra-fast, no re-encoding) to assemble the final chapters.
 
-### 2.3 Analyse Progressive et Échantillonnage
-- L'analyseur Python ne décode plus toutes les frames.
-- **Pass 1 (Rapide) :** `ffprobe` extrait la durée, la résolution et les métadonnées de base.
-- **Pass 2 (Échantillonnée) :** OpenCV extrait 1 frame par seconde (ou toutes les 2 secondes) pour détecter les visages et les coupures, divisant le temps d'analyse par 30 ou 60.
-- Les proxies sont générés en tâche de fond avec une priorité basse.
+### 2.3 Progressive Analysis and Sampling
+- The Python analyzer no longer decodes every frame.
+- **Pass 1 (Fast):** `ffprobe` extracts duration, resolution, and basic metadata.
+- **Pass 2 (Sampled):** OpenCV extracts 1 frame per second (or every 2 seconds) to detect faces and cuts, dividing analysis time by 30 or 60.
+- Proxies are generated in the background with low priority.
 
-### 2.4 Agent Local et RAG Narratif
-- L'agent utilise un système de **contexte glissant** : lorsqu'il monte le Chapitre 3, il reçoit le résumé généré du Chapitre 2 et l'intention du Chapitre 3, mais pas les détails du Chapitre 1.
-- La génération des sous-titres (Whisper) est également découpée par segments audio.
+### 2.4 Local Agent and Narrative RAG
+- The agent uses a **sliding context** system: when editing Chapter 3, it receives the generated summary of Chapter 2 and the intent of Chapter 3, but not the details of Chapter 1.
+- Subtitle generation (Whisper) is also split by audio segments.
 
-## 3. Critères d'acceptation (Testabilité)
-- [ ] Le projet peut charger 100 médias sans bloquer l'interface.
-- [ ] L'agent génère un JSON contenant un tableau de chapitres.
-- [ ] Le moteur C++ exporte la vidéo en plusieurs segments et les assemble.
-- [ ] Si l'on tue le processus de rendu au chapitre 2, la relance reprend au chapitre 2.
+## 3. Acceptance Criteria (Testability)
+- [ ] The project can load 100 media files without freezing the interface.
+- [ ] The agent generates a JSON containing an array of chapters.
+- [ ] The C++ engine exports the video in multiple segments and assembles them.
+- [ ] If the render process is killed at chapter 2, restarting resumes at chapter 2.

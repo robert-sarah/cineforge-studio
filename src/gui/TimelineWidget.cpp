@@ -52,7 +52,7 @@ void TimelineWidget::setTracks(const std::vector<TimelineTrack>& tracks) {
 void TimelineWidget::rebuildDefaultTimeline() {
     tracks_.clear();
     tracks_.push_back(TimelineTrack{"V1  •  VIDEO", false, {}});
-    tracks_.push_back(TimelineTrack{"V2  •  TEXTE / OVERLAYS", false, {}});
+    tracks_.push_back(TimelineTrack{"V2  •  TEXT / OVERLAYS", false, {}});
     tracks_.push_back(TimelineTrack{"A1  •  AUDIO", true, {}});
     double cursor = 0.0;
     for (std::size_t i = 0; i < media_.size(); ++i) {

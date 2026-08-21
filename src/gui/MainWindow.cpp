@@ -63,7 +63,7 @@ QPushButton* primaryButton(const QString& text, QWidget* parent) {
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle(QStringLiteral("CineForge Studio  •  Éditeur IA Hors Ligne"));
+    setWindowTitle(QStringLiteral("CineForge Studio  •  Offline AI Editor"));
     resize(1500, 950);
     setMinimumSize(1180, 760);
 
@@ -105,60 +105,60 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     mainLayout->addWidget(makeTimelinePanel());
     setCentralWidget(central);
 
-    auto* mediaDock = new QDockWidget(QStringLiteral("MÉDIAS & TEMPLATES"), this);
+    auto* mediaDock = new QDockWidget(QStringLiteral("MEDIA & TEMPLATES"), this);
     mediaDock->setObjectName(QStringLiteral("mediaDock"));
     mediaDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     mediaDock->setWidget(makeMediaDock());
     addDockWidget(Qt::LeftDockWidgetArea, mediaDock);
 
-    auto* agentDock = new QDockWidget(QStringLiteral("AGENT LOCAL"), this);
+    auto* agentDock = new QDockWidget(QStringLiteral("LOCAL AGENT"), this);
     agentDock->setObjectName(QStringLiteral("agentDock"));
     agentDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     agentDock->setWidget(makeAgentDock());
     addDockWidget(Qt::LeftDockWidgetArea, agentDock);
     tabifyDockWidget(mediaDock, agentDock);
 
-    auto* inspectorDock = new QDockWidget(QStringLiteral("INSPECTEUR"), this);
+    auto* inspectorDock = new QDockWidget(QStringLiteral("INSPECTOR"), this);
     inspectorDock->setObjectName(QStringLiteral("inspectorDock"));
     inspectorDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     inspectorDock->setWidget(makeInspectorDock());
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
 
-    auto* toolbar = addToolBar(QStringLiteral("Édition"));
+    auto* toolbar = addToolBar(QStringLiteral("Edit"));
     toolbar->setMovable(false);
-    auto* importAction = toolbar->addAction(QStringLiteral("Importer"));
-    auto* saveAction = toolbar->addAction(QStringLiteral("Sauvegarder"));
+    auto* importAction = toolbar->addAction(QStringLiteral("Import"));
+    auto* saveAction = toolbar->addAction(QStringLiteral("Save"));
     toolbar->addSeparator();
-    auto* undoAction = toolbar->addAction(QStringLiteral("Annuler"));
-    auto* redoAction = toolbar->addAction(QStringLiteral("Rétablir"));
+    auto* undoAction = toolbar->addAction(QStringLiteral("Undo"));
+    auto* redoAction = toolbar->addAction(QStringLiteral("Redo"));
     toolbar->addSeparator();
-    auto* exportAction = toolbar->addAction(QStringLiteral("Exporter la vidéo"));
+    auto* exportAction = toolbar->addAction(QStringLiteral("Export Video"));
     exportAction->setObjectName(QStringLiteral("primaryButton"));
     connect(importAction, &QAction::triggered, this, [this] { chooseFolder(); });
     connect(exportAction, &QAction::triggered, this, [this] { startRender(); });
     connect(saveAction, &QAction::triggered, this, [this] { saveProject(); });
     connect(undoAction, &QAction::triggered, this, [this] {
         if (timeline_) timeline_->undo();
-        appendLog(QStringLiteral("Annulation appliquée à la timeline."));
+        appendLog(QStringLiteral("Undo applied to timeline."));
     });
     connect(redoAction, &QAction::triggered, this, [this] {
         if (timeline_) timeline_->redo();
-        appendLog(QStringLiteral("Rétablissement appliqué à la timeline."));
+        appendLog(QStringLiteral("Redo applied to timeline."));
     });
 
-    auto* fileMenu = menuBar()->addMenu(QStringLiteral("Fichier"));
+    auto* fileMenu = menuBar()->addMenu(QStringLiteral("File"));
     fileMenu->addAction(importAction);
-    fileMenu->addAction(QStringLiteral("Ouvrir un projet"), this, &MainWindow::openProject);
+    fileMenu->addAction(QStringLiteral("Open Project"), this, &MainWindow::openProject);
     fileMenu->addAction(saveAction);
     fileMenu->addAction(exportAction);
     fileMenu->addSeparator();
-    fileMenu->addAction(QStringLiteral("Quitter"), this, &QWidget::close);
-    menuBar()->addMenu(QStringLiteral("Édition"));
-    menuBar()->addMenu(QStringLiteral("Effets"));
+    fileMenu->addAction(QStringLiteral("Quit"), this, &QWidget::close);
+    menuBar()->addMenu(QStringLiteral("Edit"));
+    menuBar()->addMenu(QStringLiteral("Effects"));
     menuBar()->addMenu(QStringLiteral("Audio"));
-    menuBar()->addMenu(QStringLiteral("Aide"));
+    menuBar()->addMenu(QStringLiteral("Help"));
 
-    statusBar()->showMessage(QStringLiteral("Prêt • moteur local • aucun média envoyé en ligne"));
+    statusBar()->showMessage(QStringLiteral("Ready • local engine • no media sent online"));
 }
 
 QWidget* MainWindow::makePreview() {
@@ -167,9 +167,9 @@ QWidget* MainWindow::makePreview() {
     layout->setContentsMargins(0, 0, 0, 0);
 
     auto* header = new QHBoxLayout();
-    header->addWidget(caption(QStringLiteral("PRÉVISUALISATION"), container));
+    header->addWidget(caption(QStringLiteral("PREVIEW"), container));
     header->addStretch();
-    auto* status = new QLabel(QStringLiteral("●  HORS LIGNE"), container);
+    auto* status = new QLabel(QStringLiteral("●  OFFLINE"), container);
     status->setObjectName(QStringLiteral("statusPill"));
     header->addWidget(status);
     auto* resolution = new QLabel(QStringLiteral("1080 × 1920  •  30 FPS"), container);
@@ -179,7 +179,7 @@ QWidget* MainWindow::makePreview() {
 
     auto* previewRow = new QHBoxLayout();
     previewStack_ = new QStackedLayout();
-    previewLabel_ = new QLabel(QStringLiteral("Aucune prévisualisation\n\nImporte un dossier média ou exporte un projet pour commencer"), container);
+    previewLabel_ = new QLabel(QStringLiteral("No preview\n\nImport a media folder or export a project to start"), container);
     previewLabel_->setObjectName(QStringLiteral("previewScreen"));
     previewLabel_->setAlignment(Qt::AlignCenter);
     previewLabel_->setMinimumHeight(360);
@@ -199,7 +199,7 @@ QWidget* MainWindow::makePreview() {
 
     auto* controls = new QHBoxLayout();
     auto* rewind = new QPushButton(QStringLiteral("◀  5s"), container);
-    auto* play = new QPushButton(QStringLiteral("▶  Lecture"), container);
+    auto* play = new QPushButton(QStringLiteral("▶  Play"), container);
     auto* forward = new QPushButton(QStringLiteral("5s  ▶"), container);
     controls->addStretch();
     controls->addWidget(rewind);
@@ -212,7 +212,7 @@ QWidget* MainWindow::makePreview() {
         else player_->play();
     });
     connect(player_, &QMediaPlayer::playbackStateChanged, this, [play](QMediaPlayer::PlaybackState state) {
-        play->setText(state == QMediaPlayer::PlayingState ? QStringLiteral("Ⅱ  Pause") : QStringLiteral("▶  Lecture"));
+        play->setText(state == QMediaPlayer::PlayingState ? QStringLiteral("Ⅱ  Pause") : QStringLiteral("▶  Play"));
     });
     connect(rewind, &QPushButton::clicked, this, [this] {
         if (player_) player_->setPosition(std::max<qint64>(0, player_->position() - 5000));
@@ -235,32 +235,32 @@ QWidget* MainWindow::makeMediaDock() {
 
     auto* mediaPage = new QWidget(tabs);
     auto* mediaLayout = new QVBoxLayout(mediaPage);
-    auto* import = primaryButton(QStringLiteral("＋  Importer un dossier"), mediaPage);
+    auto* import = primaryButton(QStringLiteral("＋  Import Folder"), mediaPage);
     mediaLayout->addWidget(import);
     sortCombo_ = new QComboBox(mediaPage);
-    sortCombo_->addItems({QStringLiteral("Ordre naturel (01, 02, 10)"), QStringLiteral("Nom alphabétique"), QStringLiteral("Date de modification")});
-    sortCombo_->setToolTip(QStringLiteral("Détermine l'ordre des plans ajoutés automatiquement à la timeline."));
+    sortCombo_->addItems({QStringLiteral("Natural order (01, 02, 10)"), QStringLiteral("Alphabetical name"), QStringLiteral("Modification date")});
+    sortCombo_->setToolTip(QStringLiteral("Determines the order of shots automatically added to the timeline."));
     mediaLayout->addWidget(sortCombo_);
-    mediaCountLabel_ = new QLabel(QStringLiteral("0 élément"), mediaPage);
+    mediaCountLabel_ = new QLabel(QStringLiteral("0 items"), mediaPage);
     mediaCountLabel_->setStyleSheet(QStringLiteral("color:#9199aa; padding:7px 2px;"));
     mediaLayout->addWidget(mediaCountLabel_);
     mediaList_ = new QListWidget(mediaPage);
     mediaLayout->addWidget(mediaList_, 1);
-    tabs->addTab(mediaPage, QStringLiteral("Médias"));
+    tabs->addTab(mediaPage, QStringLiteral("Media"));
 
     auto* templatesPage = new QWidget(tabs);
     auto* templatesLayout = new QVBoxLayout(templatesPage);
-    templatesLayout->addWidget(caption(QStringLiteral("CHOISIR UN STYLE"), templatesPage));
+    templatesLayout->addWidget(caption(QStringLiteral("CHOOSE A STYLE"), templatesPage));
     const QList<QPair<QString, QString>> templates = {
-        {QStringLiteral("⚡  MrBeast / High Energy"), QStringLiteral("Crée une vidéo verticale ultra dynamique style MrBeast avec des zooms rapides, des cuts serrés, des sous-titres impactants et un rythme viral")},
-        {QStringLiteral("🎬  Cinématique"), QStringLiteral("Crée un montage cinématique avec format paysage, rythme lent, zooms doux et ambiance premium")},
-        {QStringLiteral("📱  Shorts / TikTok"), QStringLiteral("Crée un short vertical très rapide avec sous-titres contrastés, cuts fréquents et accroche immédiate")},
-        {QStringLiteral("🎓  Tutoriel"), QStringLiteral("Crée un tutoriel paysage clair avec sous-titres lisibles, rythme régulier et hiérarchie visuelle")},
-        {QStringLiteral("📚  Documentaire"), QStringLiteral("Crée un documentaire paysage avec narration, rythme posé, textes élégants et sélection des plans les plus pertinents")},
-        {QStringLiteral("🌍  Vlog / Voyage"), QStringLiteral("Crée un vlog de voyage vivant avec transitions douces, zooms, musique et sous-titres lisibles")},
-        {QStringLiteral("🎮  Gaming"), QStringLiteral("Crée une vidéo gaming énergique avec cuts rapides, sous-titres contrastés et format adapté aux extraits de stream")},
-        {QStringLiteral("🎙  Podcast / Interview"), QStringLiteral("Crée une vidéo de podcast paysage avec rythme régulier, voix claire, sous-titres et mise en avant des moments forts")},
-        {QStringLiteral("📣  Publicité produit"), QStringLiteral("Crée une publicité produit courte et premium avec accroche immédiate, présentation claire et appel à l’action")}
+        {QStringLiteral("⚡  MrBeast / High Energy"), QStringLiteral("Create an ultra-dynamic vertical video MrBeast style with fast zooms, tight cuts, impactful subtitles and viral pacing")},
+        {QStringLiteral("🎬  Cinematic"), QStringLiteral("Create a cinematic edit with landscape format, slow pacing, smooth zooms and premium atmosphere")},
+        {QStringLiteral("📱  Shorts / TikTok"), QStringLiteral("Create a very fast vertical short with contrasted subtitles, frequent cuts and immediate hook")},
+        {QStringLiteral("🎓  Tutorial"), QStringLiteral("Create a clear landscape tutorial with readable subtitles, steady pacing and visual hierarchy")},
+        {QStringLiteral("📚  Documentary"), QStringLiteral("Create a landscape documentary with narration, steady pacing, elegant texts and selection of the most relevant shots")},
+        {QStringLiteral("🌍  Vlog / Travel"), QStringLiteral("Create a lively travel vlog with smooth transitions, zooms, music and readable subtitles")},
+        {QStringLiteral("🎮  Gaming"), QStringLiteral("Create an energetic gaming video with fast cuts, contrasted subtitles and format adapted to stream highlights")},
+        {QStringLiteral("🎙  Podcast / Interview"), QStringLiteral("Create a landscape podcast video with steady pacing, clear voice, subtitles and highlight of best moments")},
+        {QStringLiteral("📣  Product Ad"), QStringLiteral("Create a short and premium product ad with immediate hook, clear presentation and call to action")}
     };
     for (const auto& item : templates) {
         auto* button = new QPushButton(item.first, templatesPage);
@@ -273,14 +273,14 @@ QWidget* MainWindow::makeMediaDock() {
 
     auto* modelsPage = new QWidget(tabs);
     auto* modelsLayout = new QVBoxLayout(modelsPage);
-    modelsLayout->addWidget(caption(QStringLiteral("MODÈLES LOCAUX • 100 % HORS LIGNE"), modelsPage));
-    auto* modelsHint = new QLabel(QStringLiteral("Les poids restent sur ton disque. Double-clique un modèle installé pour l'utiliser dans l'inspecteur."), modelsPage);
+    modelsLayout->addWidget(caption(QStringLiteral("LOCAL MODELS • 100% OFFLINE"), modelsPage));
+    auto* modelsHint = new QLabel(QStringLiteral("Weights stay on your disk. Double-click an installed model to use it in the inspector."), modelsPage);
     modelsHint->setWordWrap(true);
     modelsHint->setStyleSheet(QStringLiteral("color:#9199aa; padding:4px 0 8px;"));
     modelsLayout->addWidget(modelsHint);
     auto* modelList = new QListWidget(modelsPage);
     modelsLayout->addWidget(modelList, 1);
-    auto* openModels = new QPushButton(QStringLiteral("Ouvrir le dossier des modèles"), modelsPage);
+    auto* openModels = new QPushButton(QStringLiteral("Open models folder"), modelsPage);
     modelsLayout->addWidget(openModels);
     const auto refreshModels = [this, modelList] {
         modelList->clear();
@@ -300,7 +300,7 @@ QWidget* MainWindow::makeMediaDock() {
             item->setData(Qt::UserRole + 1, installed);
         }
     };
-    auto* refreshModelsButton = new QPushButton(QStringLiteral("Actualiser les statuts"), modelsPage);
+    auto* refreshModelsButton = new QPushButton(QStringLiteral("Refresh status"), modelsPage);
     modelsLayout->addWidget(refreshModelsButton);
     connect(refreshModelsButton, &QPushButton::clicked, this, refreshModels);
     connect(openModels, &QPushButton::clicked, this, [this] {
@@ -317,12 +317,12 @@ QWidget* MainWindow::makeMediaDock() {
             if (model.kind == ModelKind::Whisper && whisperModelEdit_) whisperModelEdit_->setText(QString::fromStdString(path.string()));
             if (model.kind == ModelKind::PiperVoice && piperModelEdit_) piperModelEdit_->setText(QString::fromStdString(path.string()));
             if (model.kind == ModelKind::Agent && agentModelEdit_) agentModelEdit_->setText(QString::fromStdString(path.string()));
-            appendLog(QStringLiteral("Modèle sélectionné : %1").arg(QString::fromStdString(path.string())));
+            appendLog(QStringLiteral("Model selected: %1").arg(QString::fromStdString(path.string())));
             break;
         }
     });
     refreshModels();
-    tabs->addTab(modelsPage, QStringLiteral("Modèles"));
+    tabs->addTab(modelsPage, QStringLiteral("Models"));
     layout->addWidget(tabs, 1);
     connect(import, &QPushButton::clicked, this, [this] { chooseFolder(); });
     connect(sortCombo_, &QComboBox::currentIndexChanged, this, [this](int) { rescanCurrentFolder(); });
@@ -340,7 +340,7 @@ QWidget* MainWindow::makeInspectorDock() {
     auto* exportBox = new QGroupBox(QStringLiteral("Composition"), panel);
     auto* exportForm = new QFormLayout(exportBox);
     formatCombo_ = new QComboBox(exportBox);
-    formatCombo_->addItems({QStringLiteral("Vertical  1080 × 1920"), QStringLiteral("Paysage  1920 × 1080"), QStringLiteral("Carré  1080 × 1080")});
+    formatCombo_->addItems({QStringLiteral("Vertical  1080 × 1920"), QStringLiteral("Landscape  1920 × 1080"), QStringLiteral("Square  1080 × 1080")});
     fpsCombo_ = new QComboBox(exportBox);
     fpsCombo_->addItems({QStringLiteral("24 fps"), QStringLiteral("30 fps"), QStringLiteral("60 fps")});
     fpsCombo_->setCurrentIndex(1);
@@ -353,46 +353,46 @@ QWidget* MainWindow::makeInspectorDock() {
     encoderCombo_->addItem(QStringLiteral("Linux • VAAPI"), QStringLiteral("h264_vaapi"));
     encoderCombo_->addItem(QStringLiteral("Apple • VideoToolbox"), QStringLiteral("h264_videotoolbox"));
     exportForm->addRow(QStringLiteral("Format"), formatCombo_);
-    exportForm->addRow(QStringLiteral("Images/s"), fpsCombo_);
-    exportForm->addRow(QStringLiteral("Qualité"), crfSpin_);
-    exportForm->addRow(QStringLiteral("Encodeur"), encoderCombo_);
-    zoomCheck_ = new QCheckBox(QStringLiteral("Zoom animé sur les images"), exportBox);
+    exportForm->addRow(QStringLiteral("FPS"), fpsCombo_);
+    exportForm->addRow(QStringLiteral("Quality"), crfSpin_);
+    exportForm->addRow(QStringLiteral("Encoder"), encoderCombo_);
+    zoomCheck_ = new QCheckBox(QStringLiteral("Animated zoom on images"), exportBox);
     zoomCheck_->setChecked(true);
-    subtitlesCheck_ = new QCheckBox(QStringLiteral("Incruster les sous-titres"), exportBox);
+    subtitlesCheck_ = new QCheckBox(QStringLiteral("Burn-in subtitles"), exportBox);
     subtitlesCheck_->setChecked(true);
     exportForm->addRow(zoomCheck_);
     exportForm->addRow(subtitlesCheck_);
-    proxyCheck_ = new QCheckBox(QStringLiteral("Préparer des proxies pour les vidéos lourdes"), exportBox);
+    proxyCheck_ = new QCheckBox(QStringLiteral("Prepare proxies for heavy videos"), exportBox);
     proxyCheck_->setChecked(false);
     proxyWidthSpin_ = new QSpinBox(exportBox);
     proxyWidthSpin_->setRange(320, 1920);
     proxyWidthSpin_->setValue(960);
     exportForm->addRow(proxyCheck_);
-    exportForm->addRow(QStringLiteral("Largeur proxy"), proxyWidthSpin_);
+    exportForm->addRow(QStringLiteral("Proxy width"), proxyWidthSpin_);
     layout->addWidget(exportBox);
 
-    layout->addWidget(caption(QStringLiteral("VOIX & SOUS-TITRES"), panel));
-    auto* audioBox = new QGroupBox(QStringLiteral("Services locaux"), panel);
+    layout->addWidget(caption(QStringLiteral("VOICE & SUBTITLES"), panel));
+    auto* audioBox = new QGroupBox(QStringLiteral("Local Services"), panel);
     auto* audioForm = new QFormLayout(audioBox);
     voiceEdit_ = new QLineEdit(audioBox);
     voiceEdit_->setPlaceholderText(QStringLiteral("voiceover.wav / mp3"));
     subtitlesEdit_ = new QLineEdit(audioBox);
     subtitlesEdit_->setPlaceholderText(QStringLiteral("subtitles.srt"));
     musicEdit_ = new QLineEdit(audioBox);
-    musicEdit_->setPlaceholderText(QStringLiteral("music.mp3 (optionnel)"));
+    musicEdit_->setPlaceholderText(QStringLiteral("music.mp3 (optional)"));
     scriptEdit_ = new QLineEdit(audioBox);
-    scriptEdit_->setPlaceholderText(QStringLiteral("Texte de narration Piper"));
+    scriptEdit_->setPlaceholderText(QStringLiteral("Piper narration text"));
     piperModelEdit_ = new QLineEdit(audioBox);
     piperModelEdit_->setPlaceholderText(QStringLiteral("models/voice.onnx"));
     whisperModelEdit_ = new QLineEdit(audioBox);
     whisperModelEdit_->setPlaceholderText(QStringLiteral("models/ggml-small.bin"));
-    audioForm->addRow(QStringLiteral("Voix"), voiceEdit_);
-    audioForm->addRow(QStringLiteral("Musique"), musicEdit_);
-    audioForm->addRow(QStringLiteral("Sous-titres"), subtitlesEdit_);
+    audioForm->addRow(QStringLiteral("Voice"), voiceEdit_);
+    audioForm->addRow(QStringLiteral("Music"), musicEdit_);
+    audioForm->addRow(QStringLiteral("Subtitles"), subtitlesEdit_);
     audioForm->addRow(QStringLiteral("Script"), scriptEdit_);
-    normalizeAudioCheck_ = new QCheckBox(QStringLiteral("Normaliser le niveau sonore"), audioBox);
+    normalizeAudioCheck_ = new QCheckBox(QStringLiteral("Normalize audio level"), audioBox);
     normalizeAudioCheck_->setChecked(true);
-    duckMusicCheck_ = new QCheckBox(QStringLiteral("Baisser la musique sous la voix"), audioBox);
+    duckMusicCheck_ = new QCheckBox(QStringLiteral("Duck music under voice"), audioBox);
     duckMusicCheck_->setChecked(true);
     audioForm->addRow(normalizeAudioCheck_);
     audioForm->addRow(duckMusicCheck_);
@@ -400,10 +400,10 @@ QWidget* MainWindow::makeInspectorDock() {
     audioForm->addRow(QStringLiteral("Whisper"), whisperModelEdit_);
     layout->addWidget(audioBox);
 
-    layout->addWidget(caption(QStringLiteral("PROJET"), panel));
+    layout->addWidget(caption(QStringLiteral("PROJECT"), panel));
     outputEdit_ = new QLineEdit(QStringLiteral("output.mp4"), panel);
     layout->addWidget(outputEdit_);
-    renderButton_ = primaryButton(QStringLiteral("Créer la vidéo"), panel);
+    renderButton_ = primaryButton(QStringLiteral("Create Video"), panel);
     layout->addWidget(renderButton_);
     progressBar_ = new QProgressBar(panel);
     progressBar_->setRange(0, 100);
@@ -419,25 +419,25 @@ QWidget* MainWindow::makeAgentDock() {
     auto* panel = new QWidget(this);
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(10, 10, 10, 10);
-    layout->addWidget(caption(QStringLiteral("DONNE UNE INSTRUCTION À L’AGENT"), panel));
+    layout->addWidget(caption(QStringLiteral("GIVE AN INSTRUCTION TO THE AGENT"), panel));
     agentModelEdit_ = new QLineEdit(panel);
-    agentModelEdit_->setPlaceholderText(QStringLiteral("Modèle GGUF (optionnel)"));
+    agentModelEdit_->setPlaceholderText(QStringLiteral("GGUF Model (optional)"));
     layout->addWidget(agentModelEdit_);
     commandEdit_ = new QLineEdit(panel);
-    commandEdit_->setPlaceholderText(QStringLiteral("Ex. : transforme ce dossier en short viral très rythmé"));
+    commandEdit_->setPlaceholderText(QStringLiteral("E.g.: transform this folder into a highly rhythmic viral short"));
     layout->addWidget(commandEdit_);
-    auto* apply = primaryButton(QStringLiteral("Appliquer le plan"), panel);
+    auto* apply = primaryButton(QStringLiteral("Apply plan"), panel);
     layout->addWidget(apply);
     agentLog_ = new QPlainTextEdit(panel);
     agentLog_->setReadOnly(true);
-    agentLog_->setPlaceholderText(QStringLiteral("L'agent local expliquera ici les choix appliqués…"));
+    agentLog_->setPlaceholderText(QStringLiteral("The local agent will explain applied choices here…"));
     layout->addWidget(agentLog_, 1);
     connect(apply, &QPushButton::clicked, this, [this] {
         LocalAgent agent;
         const auto plan = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
         agentLog_->appendPlainText(QString::fromStdString(agent.explainPlan(plan)));
         if (plan.style == "high-energy") timeline_->setStyleName(QStringLiteral("MrBeast / High Energy"));
-        else if (plan.style == "cinematic") timeline_->setStyleName(QStringLiteral("Cinématique"));
+        else if (plan.style == "cinematic") timeline_->setStyleName(QStringLiteral("Cinematic"));
         else timeline_->setStyleName(QStringLiteral("Standard"));
     });
     return panel;
@@ -450,7 +450,7 @@ QWidget* MainWindow::makeTimelinePanel() {
     auto* header = new QHBoxLayout();
     header->addWidget(caption(QStringLiteral("TIMELINE"), panel));
     header->addStretch();
-    header->addWidget(new QLabel(QStringLiteral("+ Piste vidéo   + Piste audio   + Texte"), panel));
+    header->addWidget(new QLabel(QStringLiteral("+ Video track   + Audio track   + Text"), panel));
     timeline_ = new TimelineWidget(panel);
     layout->addLayout(header);
     layout->addWidget(timeline_);
@@ -460,7 +460,7 @@ QWidget* MainWindow::makeTimelinePanel() {
 void MainWindow::saveProject() {
     QString target;
     if (!currentFolder_.empty()) target = QString::fromStdString((currentFolder_ / "project.cineforge").string());
-    target = QFileDialog::getSaveFileName(this, QStringLiteral("Sauvegarder le projet CineForge"), target, QStringLiteral("Projet CineForge (*.cineforge)"));
+    target = QFileDialog::getSaveFileName(this, QStringLiteral("Save CineForge Project"), target, QStringLiteral("CineForge Project (*.cineforge)"));
     if (target.isEmpty()) return;
 
     QJsonObject root;
@@ -506,31 +506,31 @@ void MainWindow::saveProject() {
 
     QSaveFile file(target);
     if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
-        QMessageBox::warning(this, QStringLiteral("Sauvegarde impossible"), QStringLiteral("Le fichier de projet ne peut pas être écrit."));
+        QMessageBox::warning(this, QStringLiteral("Cannot save"), QStringLiteral("The project file could not be written."));
         return;
     }
-    appendLog(QStringLiteral("Projet sauvegardé : %1").arg(target));
-    statusBar()->showMessage(QStringLiteral("Projet CineForge sauvegardé"));
+    appendLog(QStringLiteral("Project saved: %1").arg(target));
+    statusBar()->showMessage(QStringLiteral("CineForge Project saved"));
 }
 
 void MainWindow::openProject() {
-    const auto target = QFileDialog::getOpenFileName(this, QStringLiteral("Ouvrir un projet CineForge"), QString(), QStringLiteral("Projet CineForge (*.cineforge)"));
+    const auto target = QFileDialog::getOpenFileName(this, QStringLiteral("Open CineForge Project"), QString(), QStringLiteral("CineForge Project (*.cineforge)"));
     if (target.isEmpty()) return;
     QFile file(target);
     if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, QStringLiteral("Ouverture impossible"), QStringLiteral("Le fichier de projet ne peut pas être lu."));
+        QMessageBox::warning(this, QStringLiteral("Cannot open"), QStringLiteral("The project file could not be read."));
         return;
     }
     QJsonParseError parseError;
     const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        QMessageBox::warning(this, QStringLiteral("Projet invalide"), parseError.errorString());
+        QMessageBox::warning(this, QStringLiteral("Invalid project"), parseError.errorString());
         return;
     }
     const auto root = document.object();
     const auto input = root.value(QStringLiteral("inputDirectory")).toString();
     if (input.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("Projet incomplet"), QStringLiteral("Le dossier média du projet est absent."));
+        QMessageBox::warning(this, QStringLiteral("Incomplete project"), QStringLiteral("The project's media folder is missing."));
         return;
     }
     importFolder(std::filesystem::path(input.toStdString()));
@@ -558,12 +558,12 @@ void MainWindow::openProject() {
         tracks.push_back(track);
     }
     if (timeline_ && !tracks.empty()) timeline_->setTracks(tracks);
-    appendLog(QStringLiteral("Projet ouvert : %1").arg(target));
-    statusBar()->showMessage(QStringLiteral("Projet CineForge ouvert"));
+    appendLog(QStringLiteral("Project opened: %1").arg(target));
+    statusBar()->showMessage(QStringLiteral("CineForge Project opened"));
 }
 
 void MainWindow::chooseFolder() {
-    const auto folder = QFileDialog::getExistingDirectory(this, QStringLiteral("Choisir le dossier média"));
+    const auto folder = QFileDialog::getExistingDirectory(this, QStringLiteral("Choose media folder"));
     if (!folder.isEmpty()) importFolder(std::filesystem::path(folder.toStdString()));
 }
 
@@ -571,8 +571,8 @@ void MainWindow::importFolder(const std::filesystem::path& folder) {
     currentFolder_ = folder;
     rescanCurrentFolder();
     outputEdit_->setText(QString::fromStdString((folder / "output.mp4").string()));
-    statusBar()->showMessage(QStringLiteral("%1 média(s) importé(s) depuis %2").arg(currentMedia_.size()).arg(QString::fromStdString(folder.string())));
-    previewLabel_->setText(QStringLiteral("Projet chargé\n\n%1 média(s) • prêt pour le montage").arg(currentMedia_.size()));
+    statusBar()->showMessage(QStringLiteral("%1 media imported from %2").arg(currentMedia_.size()).arg(QString::fromStdString(folder.string())));
+    previewLabel_->setText(QStringLiteral("Project loaded\n\n%1 media • ready for editing").arg(currentMedia_.size()));
     for (const auto& item : currentMedia_) {
         if (item.type == MediaType::Video) {
             loadPreviewFile(item.path);
@@ -585,7 +585,7 @@ void MainWindow::loadPreviewFile(const std::filesystem::path& file) {
     if (!player_ || file.empty()) return;
     player_->setSource(QUrl::fromLocalFile(QString::fromStdString(file.string())));
     if (previewStack_ && videoWidget_) previewStack_->setCurrentWidget(videoWidget_);
-    appendLog(QStringLiteral("Prévisualisation chargée : %1").arg(QString::fromStdString(file.filename().string())));
+    appendLog(QStringLiteral("Preview loaded: %1").arg(QString::fromStdString(file.filename().string())));
 }
 
 void MainWindow::rescanCurrentFolder() {
@@ -609,13 +609,13 @@ void MainWindow::refreshMediaList() {
         const QString icon = item.type == MediaType::Image ? QStringLiteral("▧") : QStringLiteral("▶");
         mediaList_->addItem(icon + QStringLiteral("  ") + QString::fromStdString(item.path.filename().string()));
     }
-    mediaCountLabel_->setText(QStringLiteral("%1 élément(s)").arg(currentMedia_.size()));
+    mediaCountLabel_->setText(QStringLiteral("%1 items").arg(currentMedia_.size()));
 }
 
 void MainWindow::applyTemplate(const QString& name, const QString& instruction) {
     commandEdit_->setText(instruction);
     timeline_->setStyleName(name);
-    agentLog_->appendPlainText(QStringLiteral("Template sélectionné : %1").arg(name));
+    agentLog_->appendPlainText(QStringLiteral("Template selected: %1").arg(name));
     agentLog_->appendPlainText(instruction);
 }
 
@@ -626,14 +626,14 @@ void MainWindow::appendLog(const QString& text) {
 
 void MainWindow::startRender() {
     if (currentFolder_.empty() || currentMedia_.empty()) {
-        QMessageBox::warning(this, QStringLiteral("Projet vide"), QStringLiteral("Importe d'abord un dossier contenant des images ou des vidéos."));
+        QMessageBox::warning(this, QStringLiteral("Empty project"), QStringLiteral("First import a folder containing images or videos."));
         return;
     }
     renderButton_->setEnabled(false);
     progressBar_->setValue(0);
     if (!renderLog_) renderLog_ = new QPlainTextEdit(this);
     renderLog_->clear();
-    appendLog(QStringLiteral("Démarrage du rendu local…"));
+    appendLog(QStringLiteral("Starting local render…"));
 
     Project project;
     project.setInputDirectory(currentFolder_);
@@ -643,7 +643,7 @@ void MainWindow::startRender() {
     LocalAgent agent;
     RenderPlan interpreted;
     if (agentModelEdit_ && !agentModelEdit_->text().isEmpty()) {
-        appendLog(QStringLiteral("Appel de l'agent GGUF local…"));
+        appendLog(QStringLiteral("Calling local GGUF agent…"));
         interpreted = agent.interpretWithGguf(commandEdit_->text().toStdString(), agentModelEdit_->text().toStdString(), currentFolder_);
     } else {
         interpreted = agent.interpret(commandEdit_->text().toStdString(), currentFolder_);
@@ -672,7 +672,7 @@ void MainWindow::startRender() {
         const auto voicePath = plan.options.voiceOverFile.empty() ? currentFolder_ / "voiceover.wav" : plan.options.voiceOverFile;
         PiperVoiceEngine piper;
         std::string error;
-        appendLog(QStringLiteral("Génération de la voix avec Piper…"));
+        appendLog(QStringLiteral("Generating voice with Piper…"));
         if (piper.synthesize(scriptEdit_->text().toStdString(), piperModelEdit_->text().toStdString(), voicePath, &error)) {
             plan.options.voiceOverFile = voicePath;
             voiceEdit_->setText(QString::fromStdString(voicePath.string()));
@@ -684,7 +684,7 @@ void MainWindow::startRender() {
         const auto srtPath = currentFolder_ / "subtitles.srt";
         WhisperSubtitleEngine whisper;
         std::string error;
-        appendLog(QStringLiteral("Transcription Whisper locale…"));
+        appendLog(QStringLiteral("Local Whisper transcription…"));
         if (whisper.transcribe(audioPath.toStdString(), whisperModelEdit_->text().toStdString(), srtPath, &error)) {
             plan.options.subtitlesFile = srtPath;
             subtitlesEdit_->setText(QString::fromStdString(srtPath.string()));
@@ -701,12 +701,12 @@ void MainWindow::startRender() {
         }, &error);
     renderButton_->setEnabled(true);
     if (success) {
-        previewLabel_->setText(QStringLiteral("Export terminé\n\n%1").arg(QString::fromStdString(plan.outputFile.string())));
+        previewLabel_->setText(QStringLiteral("Export finished\n\n%1").arg(QString::fromStdString(plan.outputFile.string())));
         loadPreviewFile(plan.outputFile);
-        QMessageBox::information(this, QStringLiteral("Export terminé"), QStringLiteral("La vidéo a été créée hors ligne."));
+        QMessageBox::information(this, QStringLiteral("Export finished"), QStringLiteral("The video was created offline."));
     } else {
-        appendLog(QStringLiteral("Erreur : %1").arg(QString::fromStdString(error)));
-        QMessageBox::critical(this, QStringLiteral("Échec du rendu"), QString::fromStdString(error));
+        appendLog(QStringLiteral("Error: %1").arg(QString::fromStdString(error)));
+        QMessageBox::critical(this, QStringLiteral("Render failed"), QString::fromStdString(error));
     }
 }
 

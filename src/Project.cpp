@@ -139,7 +139,7 @@ RenderPlan Project::makePlan() const {
         videoCursor += duration;
     }
     Chapter defaultChapter;
-    defaultChapter.title = "Chapitre 1";
+    defaultChapter.title = "Chapter 1";
     defaultChapter.startTime = 0.0;
     defaultChapter.duration = videoCursor;
     defaultChapter.segmentOutputFile = "output_chapter_1.mp4";

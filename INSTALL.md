@@ -1,21 +1,21 @@
-# Installation de CineForge Studio
+# Installing CineForge Studio
 
-CineForge Studio est conçu pour être compilé facilement sous Linux et Windows, avec un minimum de dépendances lourdes, tout en offrant une interface professionnelle et des capacités d'IA locales.
+CineForge Studio is designed to be easily compiled on Linux and Windows, with minimal heavy dependencies, while providing a professional interface and local AI capabilities.
 
-## Dépendances requises
+## Required Dependencies
 
-### Pour Linux (Ubuntu/Debian)
+### For Linux (Ubuntu/Debian)
 ```bash
 sudo apt update
 sudo apt install build-essential cmake qt6-base-dev qt6-multimedia-dev libqt6multimedia6-backends ffmpeg python3
 ```
 
-### Pour Windows
-1. Installez **Visual Studio 2022** (avec la charge de travail C++).
-2. Installez **CMake**.
-3. Installez **Qt 6** via le Qt Online Installer (cochez Qt Multimedia).
-4. Installez **Python 3**.
-5. Téléchargez les binaires de **FFmpeg** et ajoutez-les au PATH.
+### For Windows
+1. Install **Visual Studio 2022** (with the C++ workload).
+2. Install **CMake**.
+3. Install **Qt 6** via the Qt Online Installer (check Qt Multimedia).
+4. Install **Python 3**.
+5. Download **FFmpeg** binaries and add them to your PATH.
 
 ## Compilation
 
@@ -26,14 +26,14 @@ cmake -S . -B build -DCINEFORGE_BUILD_GUI=ON
 cmake --build build -j$(nproc)
 ```
 
-Les exécutables se trouveront dans le dossier `build/` :
-- `cineforge-studio` : L'interface graphique professionnelle.
-- `cineforge-cli` : L'outil en ligne de commande pour l'automatisation.
+The executables will be located in the `build/` folder:
+- `cineforge-studio`: The professional graphical interface.
+- `cineforge-cli`: The command-line tool for automation.
 
-## Installation des modèles locaux (IA)
+## Installing Local Models (AI)
 
-CineForge Studio peut fonctionner à 100% hors ligne, sans envoyer vos données sur des serveurs distants.
-Pour activer l'IA, exécutez le script d'installation inclus :
+CineForge Studio can run 100% offline, without sending your data to remote servers.
+To enable AI, run the included installation script:
 
 ```bash
 ./tools/download_models.sh --help
@@ -42,25 +42,25 @@ Pour activer l'IA, exécutez le script d'installation inclus :
 ./tools/download_models.sh agent-llama3-8b
 ```
 
-Les modèles seront téléchargés dans le dossier `models/` et automatiquement détectés par le logiciel. Les poids volumineux restent exclus du dépôt Git public et doivent respecter leurs licences respectives.
+The models will be downloaded to the `models/` folder and automatically detected by the software. Large weights remain excluded from the public Git repository and must comply with their respective licenses.
 
-## Analyse intelligente des médias
+## Smart Media Analysis
 
-Pour générer le catalogue local utilisé par l’agent, lancez :
+To generate the local catalog used by the agent, run:
 
 ```bash
-python3 tools/analyze_media.py /chemin/vers/mes_medias --vision
-python3 tools/generate_timeline.py /chemin/vers/mes_medias catalog.json --style high-energy
-python3 tools/make_proxies.py /chemin/vers/mes_medias
+python3 tools/analyze_media.py /path/to/my_media --vision
+python3 tools/generate_timeline.py /path/to/my_media catalog.json --style high-energy
+python3 tools/make_proxies.py /path/to/my_media
 ```
 
-Le mode `--vision` utilise OpenCV lorsqu’il est installé pour calculer un indice de netteté, compter les visages visibles dans des images ou échantillons vidéo et estimer les changements de scène. Sans OpenCV, l’analyse reste fonctionnelle avec les métadonnées `ffprobe`.
+The `--vision` mode uses OpenCV when installed to calculate a sharpness index, count visible faces in images or video samples, and estimate scene changes. Without OpenCV, the analysis remains functional using `ffprobe` metadata.
 
-## Audio et accélération matérielle
+## Audio and Hardware Acceleration
 
-CineForge détecte les fichiers audio déposés dans le dossier, normalise le niveau sonore et peut réduire automatiquement la musique sous une voix off. Le champ d’encodeur du projet accepte `libx264`, `h264_nvenc`, `h264_vaapi` et `h264_videotoolbox` lorsque le matériel et la version FFmpeg les prennent en charge. Un encodeur indisponible doit être remplacé par `libx264`.
+CineForge detects audio files dropped in the folder, normalizes the volume, and can automatically duck the music under a voiceover. The project encoder field accepts `libx264`, `h264_nvenc`, `h264_vaapi`, and `h264_videotoolbox` when the hardware and FFmpeg version support them. An unavailable encoder must be replaced by `libx264`.
 
-## Lancer les tests
+## Running Tests
 
 ```bash
 python3 -m unittest discover tests/
